@@ -4,40 +4,57 @@ import type { RecentSession, SessionSummary } from '../../../shared/types.ts'
 export interface WorkspaceGroup {
   /** Canonical workspace directory shared by the section's sessions. */
   path: string
-  /** Folder basename, qualified by its parent when another section shares it. */
+  /** The user's sidebar name, else the folder basename qualified by its parent when shared. */
   name: string
+  /** Whether `name` comes from the user rather than from the folder. */
+  customName: boolean
   /** Visible session rows, most recent activity first. */
   sessions: RecentSession[]
+  /** Rows the user archived, most recent activity first; they stay out of navigation. */
+  archivedSessions: RecentSession[]
   /** Newest row timestamp, or 0 for a workspace that has no sessions yet. */
   latestActivity: number
+}
+
+/** Sidebar-only preferences layered over the sessions Pi persists. */
+export interface WorkspaceGroupOptions {
+  /** Session files the user archived. */
+  archivedSessionPaths?: ReadonlySet<string>
+  /** Display names chosen by the user, keyed by canonical workspace path. */
+  workspaceNames?: Readonly<Record<string, string>>
 }
 
 /**
  * Builds the sidebar sections from every workspace that owns a visible session,
  * plus the workspaces the user added explicitly.
  *
- * Sections are ordered by their newest session activity. Explicitly added
- * workspaces without sessions keep their insertion order after the active ones.
+ * Sections are ordered by their newest session activity, archived rows included,
+ * so archiving never reshuffles the sidebar. Explicitly added workspaces without
+ * sessions keep their insertion order after the active ones.
  */
 export function workspaceGroups(
   recentSessions: readonly RecentSession[],
   sentSessions: readonly RecentSession[],
   liveSessions: readonly SessionSummary[],
   workspacePaths: readonly string[],
+  { archivedSessionPaths = new Set(), workspaceNames = {} }: WorkspaceGroupOptions = {},
 ): WorkspaceGroup[] {
   const rows = sidebarSessionRows(recentSessions, sentSessions, liveSessions)
   const paths = uniquePaths([...workspacePaths, ...rows.map((row) => row.cwd)])
   return paths
     .map((path) => {
-      const sessions = rows
+      const workspaceRows = rows
         .filter((row) => row.cwd === path)
         .sort(newestActivityFirst)
+      const customName = workspaceNames[path]?.trim() ?? ''
       return {
         path,
-        name: workspaceName(path, paths),
-        sessions,
+        name: customName || workspaceName(path, paths),
+        customName: customName !== '',
+        sessions: workspaceRows.filter((row) => !archivedSessionPaths.has(row.sessionPath)),
+        archivedSessions: workspaceRows.filter((row) => archivedSessionPaths.has(row.sessionPath)),
         // Unknown activity from an unpersisted live session must not reorder the sections.
-        latestActivity: sessions.reduce((latest, row) => Math.max(latest, row.updatedAt), 0),
+        latestActivity: workspaceRows.reduce((latest, row) => Math.max(latest, row.updatedAt), 0),
       }
     })
     .sort((left, right) => right.latestActivity - left.latestActivity)

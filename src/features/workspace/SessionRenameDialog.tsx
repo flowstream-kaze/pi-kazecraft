@@ -10,12 +10,28 @@ interface SessionRenameDialogProps {
   initialName: string
   onClose: () => void
   onConfirm: (name: string) => Promise<void>
+  /** What is renamed; drives the heading, label, and messages. Defaults to a session. */
+  subject?: 'session' | 'workspace'
 }
 
-/** Edits a session title without exposing the process lifecycle to the UI. */
+const subjectCopy = {
+  session: {
+    title: 'Rename session',
+    description: 'Choose a name that is easy to find in your history.',
+    label: 'Session name',
+  },
+  workspace: {
+    title: 'Rename workspace',
+    description: 'Only the sidebar name changes. The folder on disk keeps its name.',
+    label: 'Workspace name',
+  },
+} as const
+
+/** Edits a session or workspace title without exposing the process lifecycle to the UI. */
 export function SessionRenameDialog(
-  { initialName, onClose, onConfirm }: SessionRenameDialogProps,
+  { initialName, onClose, onConfirm, subject = 'session' }: SessionRenameDialogProps,
 ) {
+  const copy = subjectCopy[subject]
   const [name, setName] = useState(initialName)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -61,7 +77,7 @@ export function SessionRenameDialog(
     event.preventDefault()
     const normalized = name.trim()
     if (!normalized) {
-      setError('A session name is required.')
+      setError(`A ${subject} name is required.`)
       inputRef.current?.focus()
       return
     }
@@ -76,7 +92,7 @@ export function SessionRenameDialog(
       await onConfirm(normalized)
       onClose()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to rename the session.')
+      setError(cause instanceof Error ? cause.message : `Unable to rename the ${subject}.`)
     } finally {
       setSaving(false)
     }
@@ -100,10 +116,10 @@ export function SessionRenameDialog(
         ref={dialogRef}
         role='dialog'
       >
-        <h2 id='session-rename-title'>Rename session</h2>
-        <p>Choose a name that is easy to find in your history.</p>
+        <h2 id='session-rename-title'>{copy.title}</h2>
+        <p>{copy.description}</p>
         <label className='session-rename-label' htmlFor='session-rename-input'>
-          Session name
+          {copy.label}
         </label>
         <input
           aria-invalid={Boolean(error)}

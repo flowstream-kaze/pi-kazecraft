@@ -115,9 +115,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 - **Git:** review status, diffs, changed files, and unpushed commits; commit, push, reset, or revert without leaving the conversation
 
-- **Provider quotas:** see OpenAI Codex and GitHub Copilot usage windows in one panel (I only use these, ahah. Feel free to add your provider.)
-
-- **Terminal:** open an installed native Windows, Linux, or WSL terminal in the current workspace from the rail, palette, or a shortcut
+- **Terminal:** open an installed native Windows, Linux, or WSL terminal in the current workspace from the palette or a shortcut
 
 ### Shape the workbench
 

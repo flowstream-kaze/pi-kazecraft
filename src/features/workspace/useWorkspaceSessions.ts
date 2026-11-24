@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   closeSession as requestCloseSession,
   createSession,
+  deleteSession as deleteStoredSession,
   listRecentSessions,
   listSessions,
   openSession as requestOpenSession,
@@ -33,6 +34,8 @@ const WORKSPACE_PATHS_KEY = 'pi-livecraft.workspace-paths'
 const COLLAPSED_WORKSPACES_KEY = 'pi-livecraft.collapsed-workspaces'
 const ACTIVE_WORKSPACE_KEY = 'pi-livecraft.active-workspace'
 const SELECTED_SESSION_KEY = 'pi-livecraft.selected-session'
+const ARCHIVED_SESSIONS_KEY = 'pi-livecraft.archived-sessions'
+const WORKSPACE_NAMES_KEY = 'pi-livecraft.workspace-names'
 const MAX_COMPLETED_SESSIONS = 30
 
 /**
@@ -57,6 +60,12 @@ export function useWorkspaceSessions(
   const [collapsedWorkspacePaths, setCollapsedWorkspacePaths] = useState<ReadonlySet<string>>(
     readCollapsedWorkspacePaths,
   )
+  const [archivedSessionPaths, setArchivedSessionPaths] = useState<ReadonlySet<string>>(
+    () => readStringSet(ARCHIVED_SESSIONS_KEY),
+  )
+  const [workspaceNames, setWorkspaceNames] = useState<Readonly<Record<string, string>>>(
+    readWorkspaceNames,
+  )
   const [activeWorkspacePath, setActiveWorkspacePath] = useState(
     () => window.localStorage.getItem(ACTIVE_WORKSPACE_KEY) ?? '',
   )
@@ -78,8 +87,12 @@ export function useWorkspaceSessions(
   selectedIdRef.current = selectedId
 
   const groups = useMemo(
-    () => workspaceGroups(recentSessions, sentSessions, sessions, workspacePaths),
-    [recentSessions, sentSessions, sessions, workspacePaths],
+    () =>
+      workspaceGroups(recentSessions, sentSessions, sessions, workspacePaths, {
+        archivedSessionPaths,
+        workspaceNames,
+      }),
+    [archivedSessionPaths, recentSessions, sentSessions, sessions, workspaceNames, workspacePaths],
   )
   const groupsRef = useRef(groups)
   groupsRef.current = groups
@@ -133,6 +146,10 @@ export function useWorkspaceSessions(
   useEffect(() => writeCompletedSessionIds(completedSessionIds), [completedSessionIds])
   useEffect(() => writeWorkspacePaths(workspacePaths), [workspacePaths])
   useEffect(() => writeCollapsedWorkspaces(collapsedWorkspacePaths), [collapsedWorkspacePaths])
+  useEffect(() => writeStringSet(ARCHIVED_SESSIONS_KEY, archivedSessionPaths), [
+    archivedSessionPaths,
+  ])
+  useEffect(() => writeWorkspaceNames(workspaceNames), [workspaceNames])
 
   /** Reloads every workspace section while discarding responses superseded by a newer refresh. */
   const refreshSessions = useCallback(async () => {
@@ -300,6 +317,10 @@ export function useWorkspaceSessions(
   /** Selects the live session behind a row, or reopens its persisted history. */
   const openSessionRow = useCallback(
     async (row: RecentSession): Promise<void> => {
+      // Opening an archived session means the user wants it back in the regular list.
+      setArchivedSessionPaths((current) =>
+        current.has(row.sessionPath) ? withoutPath(current, row.sessionPath) : current
+      )
       const active = sessionsRef.current.find((session) =>
         session.sessionPath === row.sessionPath && session.status !== 'exited'
       )
@@ -399,6 +420,54 @@ export function useWorkspaceSessions(
     await refreshSessions()
   }, [refreshSessions, selectSession])
 
+  /** Closes a running session, then moves its row under the section's archived list. */
+  const archiveManagedSession = useCallback(
+    async (target: SessionActionTarget): Promise<void> => {
+      const { sessionPath } = target
+      if (!sessionPath) throw new Error('Session path is unavailable')
+      if (target.sessionId) await closeManagedSession(target.sessionId)
+      setArchivedSessionPaths((current) =>
+        current.has(sessionPath) ? current : new Set(current).add(sessionPath)
+      )
+    },
+    [closeManagedSession],
+  )
+
+  /** Returns an archived row to the regular session list without opening it. */
+  const unarchiveSession = useCallback((sessionPath: string): void => {
+    setArchivedSessionPaths((current) =>
+      current.has(sessionPath) ? withoutPath(current, sessionPath) : current
+    )
+  }, [])
+
+  /** Closes a running session, then permanently deletes its history file. */
+  const deleteManagedSession = useCallback(
+    async (target: SessionActionTarget): Promise<void> => {
+      const { sessionPath } = target
+      if (!sessionPath) throw new Error('Session path is unavailable')
+      if (target.sessionId) await closeManagedSession(target.sessionId)
+      await deleteStoredSession(target.cwd, sessionPath)
+      setArchivedSessionPaths((current) =>
+        current.has(sessionPath) ? withoutPath(current, sessionPath) : current
+      )
+      setSentSessions((current) => current.filter((sent) => sent.sessionPath !== sessionPath))
+      await refreshSessions()
+    },
+    [closeManagedSession, refreshSessions],
+  )
+
+  /** Stores a sidebar-only workspace name; an empty name restores the folder name. */
+  const renameWorkspace = useCallback((path: string, name: string): void => {
+    const normalized = name.trim()
+    setWorkspaceNames((current) => {
+      if ((current[path] ?? '') === normalized) return current
+      const next = { ...current }
+      if (normalized) next[path] = normalized
+      else delete next[path]
+      return next
+    })
+  }, [])
+
   /** Adds or replaces a pending UI request for a session. */
   const addPendingRequest = useCallback((sessionId: string, request: JsonObject): void => {
     setSessions((current) =>
@@ -453,11 +522,13 @@ export function useWorkspaceSessions(
   return {
     activatePreviousWorkspace,
     addPendingRequest,
+    archiveManagedSession,
     closeManagedSession,
     collapsedWorkspacePaths,
     completedSessionIds,
     createSessionInWorkspace,
     creatingSession,
+    deleteManagedSession,
     groups,
     isRefreshingSessions,
     markSessionCompleted,
@@ -468,14 +539,49 @@ export function useWorkspaceSessions(
     removePendingRequest,
     renameManagedSession,
     renameSession,
+    renameWorkspace,
     selectCreatedSession,
     selectedId,
     sessions,
     setNewSessionDialogOpen,
     selectSession,
     toggleWorkspaceCollapsed,
+    unarchiveSession,
     updateSession,
     workspacePath,
+  }
+}
+
+/** Restores the sidebar names the user gave to workspace folders. */
+function readWorkspaceNames(): Readonly<Record<string, string>> {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(WORKSPACE_NAMES_KEY) ?? '{}')
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+    return Object.fromEntries(
+      Object.entries(value).filter((entry): entry is [string, string] =>
+        entry[0] !== '' && typeof entry[1] === 'string' && entry[1].trim() !== ''
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+function writeWorkspaceNames(names: Readonly<Record<string, string>>): void {
+  try {
+    if (Object.keys(names).length === 0) window.localStorage.removeItem(WORKSPACE_NAMES_KEY)
+    else window.localStorage.setItem(WORKSPACE_NAMES_KEY, JSON.stringify(names))
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
+function writeStringSet(key: string, values: ReadonlySet<string>): void {
+  try {
+    if (values.size === 0) window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, JSON.stringify([...values]))
+  } catch {
+    // localStorage may be unavailable
   }
 }
 
@@ -509,12 +615,7 @@ function readCollapsedWorkspacePaths(): ReadonlySet<string> {
 }
 
 function writeCollapsedWorkspaces(paths: ReadonlySet<string>): void {
-  try {
-    if (paths.size === 0) window.localStorage.removeItem(COLLAPSED_WORKSPACES_KEY)
-    else window.localStorage.setItem(COLLAPSED_WORKSPACES_KEY, JSON.stringify([...paths]))
-  } catch {
-    // localStorage may be unavailable
-  }
+  writeStringSet(COLLAPSED_WORKSPACES_KEY, paths)
 }
 
 /** Restores completed-session identifiers persisted across same-tab refreshes. */

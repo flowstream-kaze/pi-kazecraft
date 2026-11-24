@@ -5,12 +5,10 @@ import {
   discardChanges,
   getGitFileDiff,
   getGitSnapshot,
-  getQuotas,
   improvePrompt,
   openExplorer,
   openTerminal,
   pushCommits,
-  refreshQuotas,
   resetGitCommit,
   restartManager,
   revertGitCommit,
@@ -18,12 +16,10 @@ import {
   sendPiCommand,
   subscribeManagerEvents,
 } from './api.ts'
-import { quotaRefreshAllowed } from '../shared/quota-refresh.ts'
 import type {
   GitSnapshot,
   JsonObject,
   ManagerRuntimeStatus,
-  QuotaSnapshot,
   SessionSummary,
 } from '../shared/types.ts'
 import { isObject } from '../shared/is-object.ts'
@@ -48,7 +44,6 @@ import {
   type RightWidget,
 } from './features/right-sidebar/right-sidebar.ts'
 import { RightSidebar } from './features/right-sidebar/RightSidebar.tsx'
-import { quotaProviderForModel } from './features/quotas/quota-display.ts'
 import { NewSessionDialog } from './features/workspace/NewSessionDialog.tsx'
 import { useWorkspaceSessions } from './features/workspace/useWorkspaceSessions.ts'
 import { WorkspaceSidebar } from './features/workspace/WorkspaceSidebar.tsx'
@@ -153,7 +148,6 @@ function App() {
     )
   )
   const [gitSnapshot, setGitSnapshot] = useState<GitSnapshot | null>(null)
-  const [quotas, setQuotas] = useState<QuotaSnapshot | null>(null)
   const [activeRightWidget, setActiveRightWidget] = useState<RightWidget | null>(
     readActiveRightWidget,
   )
@@ -206,11 +200,6 @@ function App() {
   const gitRefreshVersionRef = useRef(0)
   const gitRefreshTimerRef = useRef<number | undefined>(undefined)
   const agentResponsesSentRef = useRef(new Set<string>())
-
-  // Conversation timing and quotas
-  const quotaAutoRefreshAtRef = useRef(new Map<string, number>())
-  const quotasRef = useRef(quotas)
-  quotasRef.current = quotas
 
   const dismissingRef = useRef(new Set<string>())
   const pendingManagerUnavailableToastsRef = useRef(new Map<string, number>())
@@ -315,11 +304,13 @@ function App() {
   const {
     activatePreviousWorkspace,
     addPendingRequest,
+    archiveManagedSession,
     closeManagedSession,
     collapsedWorkspacePaths,
     completedSessionIds,
     createSessionInWorkspace,
     creatingSession,
+    deleteManagedSession,
     groups,
     isRefreshingSessions,
     markSessionCompleted,
@@ -330,12 +321,14 @@ function App() {
     removePendingRequest,
     renameManagedSession,
     renameSession,
+    renameWorkspace,
     selectCreatedSession,
     selectedId,
     sessions,
     setNewSessionDialogOpen,
     selectSession,
     toggleWorkspaceCollapsed,
+    unarchiveSession,
     updateSession,
     workspacePath,
   } = useWorkspaceSessions({
@@ -405,11 +398,6 @@ function App() {
     await Promise.all([refreshSnapshot(selectedId), refreshSessions()])
     return true
   }, [refreshSessions, refreshSnapshot, selectedId])
-
-  const model = isObject(snapshot.state?.model) ? snapshot.state.model : undefined
-  const currentQuotaProvider = quotaProviderForModel(model?.provider)
-  const currentQuotaProviderRef = useRef(currentQuotaProvider)
-  currentQuotaProviderRef.current = currentQuotaProvider
 
   const visibleToasts = toasts.filter((toast) =>
     toast.sessionId === null || toast.sessionId === selectedId
@@ -526,35 +514,6 @@ function App() {
     }, gitRefreshDelayMs)
   }, [refreshGit, workspacePath])
 
-  /** Refreshes quotas, allowing manual clicks to bypass automatic throttling. */
-  const refreshSessionQuotas = useCallback(
-    async (sessionId: string, automatic: boolean): Promise<void> => {
-      if (!sessionId) throw new Error('An open Pi session is required to refresh quotas.')
-      if (automatic) {
-        const provider = currentQuotaProviderRef.current
-        if (!provider) return
-        const lastRefreshAt = Math.max(
-          quotasRef
-            .current
-            ?.[provider]
-            .updatedAt ?? 0,
-          quotaAutoRefreshAtRef.current.get(sessionId) ?? 0,
-        )
-        const now = Date.now()
-        if (!quotaRefreshAllowed(lastRefreshAt, true, now)) return
-        quotaAutoRefreshAtRef.current.set(sessionId, now)
-      }
-      try {
-        setQuotas((current) => current && { ...current, refreshing: true })
-        setQuotas(await refreshQuotas(sessionId, automatic))
-      } catch (cause) {
-        if (!automatic) showToast('error', messageOf(cause))
-        setQuotas(await getQuotas().catch(() => quotasRef.current))
-      }
-    },
-    [showToast],
-  )
-
   /** Sends /agent to Pi, intercepts the resulting selector silently, and caches its options. */
   const fetchAgentOptions = useCallback((sessionId: string) => {
     if (agentOptionsLoadingRef.current[sessionId] || agentOptions[sessionId]) return
@@ -586,9 +545,6 @@ function App() {
       }
     }
   }, [refreshGit])
-  useEffect(() => {
-    void getQuotas().then(setQuotas).catch(() => undefined)
-  }, [])
 
   // Selected session synchronization
   useEffect(() => setConversationNavigation(undefined), [selectedId])
@@ -639,12 +595,6 @@ function App() {
         })
       }
       if (
-        event.type === 'extension_ui_request' && event.method === 'setStatus'
-        && event.statusKey === 'pi-livecraft.quotas'
-      ) {
-        void getQuotas().then(setQuotas).catch(() => undefined)
-      }
-      if (
         event.type === 'extension_ui_request' && isBlockingDialog(event) && !isAgentSelector(event)
       ) {
         // Commit batched assistant deltas before a blocking dialog covers the conversation.
@@ -680,7 +630,6 @@ function App() {
       }
 
       const selected = sessionId === selectedIdRef.current
-      if (selected && event.type === 'agent_settled') void refreshSessionQuotas(sessionId, true)
       handlePiEvent(sessionId, event, sequence)
       if (selected && event.type === 'agent_settled')
         setFocusComposerRequest((current) => current + 1)
@@ -691,7 +640,6 @@ function App() {
       flushLiveUpdates,
       handlePiEvent,
       markSessionCompleted,
-      refreshSessionQuotas,
       scheduleGitRefresh,
       renameSession,
       selectCreatedSession,
@@ -1099,20 +1047,10 @@ function App() {
         void openExplorer(workspacePath).catch((cause) => showToast('error', messageOf(cause)))
       },
     },
-    {
-      key: 'terminal',
-      icon: <span aria-hidden='true'>›_</span>,
-      label: 'Open terminal',
-      onClick: () => {
-        void openTerminal(workspacePath, terminalCommand).catch((cause) =>
-          showToast('error', messageOf(cause))
-        )
-      },
-    },
-  ], [showToast, terminalCommand, workspacePath])
+  ], [showToast, workspacePath])
 
   // Application layout
-  const rightPanelVisible = activeRightWidget === 'todo' || activeRightWidget === 'quotas'
+  const rightPanelVisible = activeRightWidget === 'todo'
     || (activeRightWidget === 'analysis' && sessionAnalysis !== null)
     || (activeRightWidget === 'git' && gitSnapshot?.repository === true)
 
@@ -1136,7 +1074,11 @@ function App() {
         sessions={sessions}
         selectedId={selectedId}
         width={workspaceSidebarWidth}
+        onArchiveSession={archiveManagedSession}
         onCloseSession={closeManagedSession}
+        onDeleteSession={deleteManagedSession}
+        onRenameWorkspace={renameWorkspace}
+        onUnarchiveSession={unarchiveSession}
         onCreateInWorkspace={(path) => createSessionInWorkspace(path).then(() => undefined)}
         onNewSession={() => setNewSessionDialogOpen(true)}
         onOpenSession={openSessionRow}
@@ -1343,12 +1285,10 @@ function App() {
         analysisAvailable={analysisAvailable}
         compactingSessionIds={compactingSessionIds}
         completedSessionIds={completedSessionIds}
-        currentQuotaProvider={currentQuotaProvider}
         onAnalysisNavigate={navigateToAnalysisTarget}
         onResize={updateRightSidebarWidth}
         snapshot={gitSnapshot?.repository ? gitSnapshot : null}
         sessions={sessions}
-        quotas={quotas}
         width={rightSidebarWidth}
         workspacePath={workspacePath}
         railActions={railActions}
@@ -1360,7 +1300,6 @@ function App() {
         }}
         onPush={() => pushCommits(workspacePath)}
         onFileSelect={(path, commitHash) => getGitFileDiff(workspacePath, path, commitHash)}
-        onQuotaRefresh={() => refreshSessionQuotas(selectedId, false)}
         onRefresh={() => refreshGit(workspacePath, true)}
         onReset={async (hash) => {
           return await resetGitCommit(workspacePath, hash)

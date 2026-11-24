@@ -1,4 +1,4 @@
-import { open, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { open, readdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, sep } from 'node:path'
@@ -94,6 +94,15 @@ export async function loadPiSession(path: string): Promise<RecentSession> {
   const session = await readPiSession(canonicalPath, (await stat(canonicalPath)).mtimeMs)
   if (!session) throw new Error('Invalid Pi session file')
   return session
+}
+
+/**
+ * Permanently removes a session file. Pi documents deleting the `.jsonl` file as the way to
+ * remove a session; the containment check of `loadPiSession` keeps the deletion inside Pi storage.
+ */
+export async function deletePiSession(path: string): Promise<void> {
+  const session = await loadPiSession(path)
+  await rm(session.sessionPath)
 }
 
 /** Recursively scans Pi storage while retaining only session JSONL files. */

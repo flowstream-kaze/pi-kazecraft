@@ -152,3 +152,45 @@ test('includes live sessions that have no persisted history and deduplicates per
   assert.deepEqual(groups[0].sessions.map(({ id }) => id), ['persisted'])
   assert.deepEqual(groups[1].sessions.map(({ id }) => id), ['live-only'])
 })
+
+test('moves archived sessions out of the visible rows without reordering sections', () => {
+  const archived = session('/archived', 'archived-newest', 900)
+  const groups = workspaceGroups(
+    [archived, session('/archived', 'kept', 200), session('/other', 'other', 500)],
+    [],
+    [],
+    [],
+    { archivedSessionPaths: new Set([archived.sessionPath]) },
+  )
+
+  assert.deepEqual(groups.map(({ path }) => path), ['/archived', '/other'])
+  assert.deepEqual(groups[0].sessions.map(({ id }) => id), ['kept'])
+  assert.deepEqual(groups[0].archivedSessions.map(({ id }) => id), ['archived-newest'])
+  assert.deepEqual(groups[1].archivedSessions, [])
+})
+
+test('keeps a section whose sessions are all archived', () => {
+  const only = session('/quiet', 'only', 100)
+  const [group] = workspaceGroups([only], [], [], [], {
+    archivedSessionPaths: new Set([only.sessionPath]),
+  })
+
+  assert.equal(group.path, '/quiet')
+  assert.deepEqual(group.sessions, [])
+  assert.deepEqual(group.archivedSessions.map(({ id }) => id), ['only'])
+})
+
+test('uses a custom workspace name and falls back to the folder name when blank', () => {
+  const groups = workspaceGroups(
+    [session('/work/alpha', 'a', 200), session('/work/beta', 'b', 100)],
+    [],
+    [],
+    [],
+    { workspaceNames: { '/work/alpha': '  Client site  ', '/work/beta': '   ' } },
+  )
+
+  assert.deepEqual(groups.map(({ name, customName }) => ({ name, customName })), [
+    { name: 'Client site', customName: true },
+    { name: 'beta', customName: false },
+  ])
+})

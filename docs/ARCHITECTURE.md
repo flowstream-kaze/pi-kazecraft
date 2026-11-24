@@ -14,7 +14,7 @@ server/backend.ts ─── JSON Lines over local TCP ──▶ server/manager.t
 
 ## Frontend
 
-`src/App.tsx` remains the cross-cutting orchestrator: it receives the SSE stream, applies effects that span features (dialogs, Git, quotas, notifications, and manager state), and connects the panels. Workspace sections and session lifecycle belong to `useWorkspaceSessions`; selected-conversation snapshots, replay, streaming, and tool execution state belong to `useConversationRuntime`. The active workspace follows the selected session, so workspace-dependent features always read the directory of what is on screen. Area-specific logic and rendering live in `src/features/`:
+`src/App.tsx` remains the cross-cutting orchestrator: it receives the SSE stream, applies effects that span features (dialogs, Git, notifications, and manager state), and connects the panels. Workspace sections and session lifecycle belong to `useWorkspaceSessions`; selected-conversation snapshots, replay, streaming, and tool execution state belong to `useConversationRuntime`. The active workspace follows the selected session, so workspace-dependent features always read the directory of what is on screen. Area-specific logic and rendering live in `src/features/`:
 
 - `composer/` — input, commands, and image preparation;
 - `conversation/` — history, activity, usage, and tool calls;
@@ -32,7 +32,7 @@ Use the [`src/features/` map](/src/features/README.md) to locate frontend owners
 
 ## Backend and manager
 
-`server/backend.ts` exposes the web API, validates HTTP requests, serves the build, and broadcasts SSE events. Domain behavior for folder picking, Git, quotas, terminal launching, and todos lives in `server/features/`; route definitions remain in the backend. Other neighboring modules provide workspace files, recent sessions, and system integrations.
+`server/backend.ts` exposes the web API, validates HTTP requests, serves the build, and broadcasts SSE events. Domain behavior for folder picking, Git, terminal launching, and todos lives in `server/features/`; route definitions remain in the backend. Other neighboring modules provide workspace files, recent sessions, and system integrations.
 
 `server/manager.ts` is the sole owner of `pi --mode rpc` processes. `server/pi-process.ts` starts them with the extensions from `pi-extensions/`, while `server/manager-client.ts` carries backend requests over local JSON Lines. Keeping this ownership outside the backend preserves Pi sessions across backend restarts.
 

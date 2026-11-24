@@ -10,4 +10,4 @@ Each widget automatically receives an **Open…** palette command and an assigna
 
 Width and active widget are stored in `pi-livecraft.right-sidebar-width` and `pi-livecraft.right-sidebar-widget`. Legacy Git sidebar keys are read only as migration fallbacks. Width stays between 240 and 720 px.
 
-Panel contracts: [Git](/src/features/git/README.md), [quotas](/src/features/quotas/README.md), [todo](/src/features/todo/README.md), and [session analysis](/src/features/session-analysis/README.md). [Terminal](/src/features/terminal/README.md) is an immediate rail action rather than a panel. Registry and width behavior are covered by `test/shortcuts.test.ts` and `test/git-sidebar.test.ts`.
+Panel contracts: [Git](/src/features/git/README.md), [todo](/src/features/todo/README.md), and [session analysis](/src/features/session-analysis/README.md). The only rail action without a panel opens the workspace folder; [Terminal](/src/features/terminal/README.md) is reached from the command palette and its shortcut. Registry and width behavior are covered by `test/shortcuts.test.ts` and `test/git-sidebar.test.ts`.

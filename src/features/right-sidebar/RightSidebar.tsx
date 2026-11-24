@@ -12,13 +12,10 @@ import type {
   GitResetResult,
   GitRevertResult,
   GitSnapshot,
-  QuotaSnapshot,
   SessionSummary,
   TodoSessionLink,
 } from '../../../shared/types.ts'
 import { GitWidget } from '../git/GitWidget.tsx'
-import { QuotaWidget } from '../quotas/QuotaWidget.tsx'
-import { railQuota, type QuotaProvider } from '../quotas/quota-display.ts'
 import { SessionAnalysisWidget } from '../session-analysis/SessionAnalysisWidget.tsx'
 import type {
   SessionAnalysis,
@@ -45,11 +42,9 @@ export function RightSidebar({
   analysisAvailable,
   compactingSessionIds,
   completedSessionIds,
-  currentQuotaProvider,
   onAnalysisNavigate,
   onResize,
   snapshot,
-  quotas,
   width,
   workspacePath,
   railActions,
@@ -57,7 +52,6 @@ export function RightSidebar({
   onDiscard,
   onFileSelect,
   onPush,
-  onQuotaRefresh,
   onRefresh,
   onReset,
   onRevert,
@@ -73,11 +67,9 @@ export function RightSidebar({
   analysisAvailable: boolean
   compactingSessionIds: ReadonlySet<string>
   completedSessionIds: ReadonlySet<string>
-  currentQuotaProvider: QuotaProvider | undefined
   onAnalysisNavigate: (target: SessionAnalysisTarget) => void
   onResize: (width: number) => void
   snapshot: GitSnapshot | null
-  quotas: QuotaSnapshot | null
   width: number
   workspacePath: string
   railActions: RailAction[]
@@ -85,7 +77,6 @@ export function RightSidebar({
   onDiscard: (path?: string) => Promise<void>
   onFileSelect: (path: string, commitHash?: string) => Promise<GitFileDiff>
   onPush: () => Promise<GitPushResult>
-  onQuotaRefresh: () => Promise<void>
   onRefresh: () => Promise<void>
   onReset: (hash: string) => Promise<GitResetResult>
   onRevert: (hash: string) => Promise<GitRevertResult>
@@ -115,7 +106,6 @@ export function RightSidebar({
   }, [activeWidget, workspacePath])
   const collapsed = activeWidget === null || (activeWidget === 'analysis' && !analysis)
     || (activeWidget === 'git' && !snapshot)
-  const quotaSummary = railQuota(quotas, currentQuotaProvider)
 
   /** Installs temporary listeners needed for panel pointer resizing. */
   function startResize(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -214,9 +204,6 @@ export function RightSidebar({
                 snapshot={snapshot}
               />
             )}
-            {activeWidget === 'quotas' && (
-              <QuotaWidget onRefresh={onQuotaRefresh} quotas={quotas} />
-            )}
             {activeWidget === 'todo' && (
               <TodoWidget
                 activeSessionId={activeSessionId}
@@ -270,23 +257,6 @@ export function RightSidebar({
             </button>
           </Tooltip>
         )}
-        <Tooltip label={quotaSummary?.label ?? 'Quotas'}>
-          <button
-            aria-controls={activeWidget === 'quotas' ? 'quotas-panel' : undefined}
-            aria-expanded={activeWidget === 'quotas'}
-            aria-label={`${activeWidget === 'quotas' ? 'Collapse' : 'Expand'} quota panel${
-              quotaSummary ? `. ${quotaSummary.label}` : ''
-            }`}
-            className='rail-tab'
-            onClick={() => onWidgetSelect('quotas')}
-            type='button'
-          >
-            <span aria-hidden='true' className='quota-rail-value'>
-              {quotaSummary?.value ?? '%'}
-            </span>
-            {quotaSummary?.stale && <small>!</small>}
-          </button>
-        </Tooltip>
         <Tooltip label='Todo'>
           <button
             aria-controls={activeWidget === 'todo' ? 'todo-panel' : undefined}
@@ -327,7 +297,5 @@ function panelLabel(activeWidget: RightWidget | null): string {
     ? 'Session analysis'
     : activeWidget === 'todo'
     ? 'Workspace tasks'
-    : activeWidget === 'quotas'
-    ? 'Provider quotas'
     : 'Git information'
 }

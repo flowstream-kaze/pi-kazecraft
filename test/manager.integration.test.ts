@@ -706,7 +706,6 @@ const expectedExtensions = ${
     JSON.stringify([
       join(process.cwd(), 'pi-extensions/ask-user-question.ts'),
       join(process.cwd(), 'pi-extensions/plan.ts'),
-      join(process.cwd(), 'pi-extensions/quotas.ts'),
     ])
   }
 const extensionPaths = process.argv.flatMap((argument, index) =>

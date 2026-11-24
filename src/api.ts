@@ -9,7 +9,6 @@ import type {
   JsonObject,
   ManagerEvent,
   PromptTemplate,
-  QuotaSnapshot,
   RecentSession,
   SessionSnapshot,
   SessionSummary,
@@ -231,19 +230,16 @@ export async function renameSession(
   })
 }
 
+/** Permanently deletes a closed session's history file. */
+export async function deleteSession(cwd: string, sessionPath: string): Promise<void> {
+  await request<void>('/api/sessions/delete', {
+    method: 'POST',
+    body: JSON.stringify({ cwd, sessionPath }),
+  })
+}
+
 export async function getSnapshot(sessionId: string): Promise<SessionSnapshot> {
   return request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`)
-}
-
-export async function getQuotas(): Promise<QuotaSnapshot> {
-  return request<QuotaSnapshot>('/api/quotas')
-}
-
-export async function refreshQuotas(sessionId: string, automatic = false): Promise<QuotaSnapshot> {
-  return request<QuotaSnapshot>('/api/quotas/refresh', {
-    method: 'POST',
-    body: JSON.stringify({ automatic, sessionId }),
-  })
 }
 
 /** Requests an isolated rewrite without adding the draft or result to the active Pi session. */

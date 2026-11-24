@@ -12,6 +12,7 @@ import type { RecentSession, SessionSummary } from '../../../shared/types.ts'
 import { sessionIndicator } from './session-indicator.ts'
 import { SessionStatusIndicator } from './SessionStatusIndicator.tsx'
 import type { SessionActionTarget } from './sidebar-sessions.ts'
+import { SessionDeleteDialog } from './SessionDeleteDialog.tsx'
 import { SessionRenameDialog } from './SessionRenameDialog.tsx'
 import type { WorkspaceGroup } from './workspace-groups.ts'
 import {
@@ -20,11 +21,20 @@ import {
   visibleWorkspaceSessionCount,
 } from './workspace-sidebar.ts'
 
+/** What a right-click opened: a session row, or a workspace section header. */
+type ContextMenuSubject =
+  | { kind: 'session'; target: SessionActionTarget; archived: boolean }
+  | { kind: 'workspace'; group: WorkspaceGroup }
+
 interface ContextMenuState {
-  target: SessionActionTarget
+  subject: ContextMenuSubject
   x: number
   y: number
 }
+
+type RenameTarget =
+  | { kind: 'session'; target: SessionActionTarget }
+  | { kind: 'workspace'; path: string; name: string }
 
 interface WorkspaceSidebarProps {
   collapsed: boolean
@@ -36,12 +46,17 @@ interface WorkspaceSidebarProps {
   selectedId: string
   sessions: SessionSummary[]
   width: number
+  onArchiveSession: (target: SessionActionTarget) => Promise<void>
   onCloseSession: (sessionId: string) => Promise<void>
   onCreateInWorkspace: (path: string) => Promise<void>
+  onDeleteSession: (target: SessionActionTarget) => Promise<void>
   onNewSession: () => void
   onOpenSession: (row: RecentSession) => Promise<void>
   onOpenSettings: () => void
   onRenameSession: (target: SessionActionTarget, name: string) => Promise<void>
+  /** Stores a sidebar-only name; an empty name restores the folder name. */
+  onRenameWorkspace: (path: string, name: string) => void
+  onUnarchiveSession: (sessionPath: string) => void
   onToggleWorkspaceCollapsed: (path: string) => void
   onResize: (width: number) => void
   onToggleCollapsed: () => void
@@ -59,12 +74,16 @@ export function WorkspaceSidebar({
   selectedId,
   sessions,
   width,
+  onArchiveSession,
   onCloseSession,
   onCreateInWorkspace,
+  onDeleteSession,
   onNewSession,
   onOpenSession,
   onOpenSettings,
   onRenameSession,
+  onRenameWorkspace,
+  onUnarchiveSession,
   onToggleWorkspaceCollapsed,
   onResize,
   onToggleCollapsed,
@@ -74,10 +93,12 @@ export function WorkspaceSidebar({
   const [creatingInPath, setCreatingInPath] = useState('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState({ left: 0, top: 0 })
-  const [renameTarget, setRenameTarget] = useState<SessionActionTarget | null>(null)
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SessionActionTarget | null>(null)
   const [expandedWorkspacePaths, setExpandedWorkspacePaths] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [archiveOpenPaths, setArchiveOpenPaths] = useState<ReadonlySet<string>>(() => new Set())
   const revealedSelectionIdRef = useRef('')
   const selectedSessionRef = useRef<HTMLButtonElement>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -148,30 +169,40 @@ export function WorkspaceSidebar({
   }
 
   function openContextMenu(
-    target: SessionActionTarget,
+    subject: ContextMenuSubject,
     event: ReactMouseEvent<HTMLButtonElement>,
   ): void {
     event.preventDefault()
     contextMenuTriggerRef.current = event.currentTarget
-    setContextMenu({ target, x: event.clientX, y: event.clientY })
+    setContextMenu({ subject, x: event.clientX, y: event.clientY })
   }
 
   function openContextMenuFromKeyboard(
-    target: SessionActionTarget,
+    subject: ContextMenuSubject,
     event: ReactKeyboardEvent<HTMLButtonElement>,
   ): void {
     if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
     event.preventDefault()
     contextMenuTriggerRef.current = event.currentTarget
     const rect = event.currentTarget.getBoundingClientRect()
-    setContextMenu({ target, x: rect.left, y: rect.bottom })
+    setContextMenu({ subject, x: rect.left, y: rect.bottom })
+  }
+
+  /** Dismisses the menu, then runs its action and reports a failure as a notification. */
+  function runMenuAction(action: () => Promise<void> | void): void {
+    dismissContextMenu()
+    void Promise.resolve().then(action).catch(onError)
   }
 
   function startRename(): void {
     if (!contextMenu) return
-    const { target } = contextMenu
+    const { subject } = contextMenu
     dismissContextMenu()
-    setRenameTarget(target)
+    setRenameTarget(
+      subject.kind === 'session'
+        ? { kind: 'session', target: subject.target }
+        : { kind: 'workspace', path: subject.group.path, name: subject.group.name },
+    )
   }
 
   function dismissRename(): void {
@@ -179,15 +210,22 @@ export function WorkspaceSidebar({
     contextMenuTriggerRef.current?.focus()
   }
 
-  async function closeTarget(): Promise<void> {
-    const sessionId = contextMenu?.target.sessionId
+  function startDelete(target: SessionActionTarget): void {
     dismissContextMenu()
-    if (!sessionId) return
-    try {
-      await onCloseSession(sessionId)
-    } catch (cause) {
-      onError(cause)
-    }
+    setDeleteTarget(target)
+  }
+
+  function dismissDelete(): void {
+    setDeleteTarget(null)
+    contextMenuTriggerRef.current?.focus()
+  }
+
+  function toggleArchiveOpen(path: string): void {
+    setArchiveOpenPaths((current) => {
+      const next = new Set(current)
+      if (!next.delete(path)) next.add(path)
+      return next
+    })
   }
 
   function openRow(row: RecentSession): void {
@@ -266,7 +304,61 @@ export function WorkspaceSidebar({
     }
   }
 
-  const contextMenuSessionPath = contextMenu?.target.sessionPath
+  /** Renders one session row; archived rows keep every action behind the context menu. */
+  function renderSessionRow(recentSession: RecentSession, archived: boolean) {
+    const activeSession = sessions.find((session) =>
+      session.sessionPath === recentSession.sessionPath
+      && session.status !== 'exited'
+    )
+    const indicator = sessionIndicator(
+      activeSession,
+      selectedId,
+      compactingSessionIds,
+      completedSessionIds,
+    )
+    const sessionLabel = openingSessionPath === recentSession.sessionPath
+      ? 'Opening…'
+      : recentSession.name
+    const subject: ContextMenuSubject = {
+      kind: 'session',
+      archived,
+      target: {
+        cwd: recentSession.cwd,
+        name: recentSession.name,
+        sessionId: activeSession?.id,
+        sessionPath: recentSession.sessionPath,
+      },
+    }
+    return (
+      <Tooltip
+        key={recentSession.sessionPath}
+        hint='Right-click for rename, archive, and delete'
+        label={`${recentSession.name}\n${
+          new Date(recentSession.updatedAt).toLocaleString('en-US')
+        }`}
+      >
+        <button
+          aria-haspopup='menu'
+          className={`session-item${archived ? ' archived' : ''}${
+            activeSession?.id === selectedId ? ' selected' : ''
+          }${indicator ? ` ${indicator}` : ''}`}
+          disabled={openingSessionPath === recentSession.sessionPath}
+          onContextMenu={(event) => openContextMenu(subject, event)}
+          onKeyDown={(event) => openContextMenuFromKeyboard(subject, event)}
+          onClick={() => openRow(recentSession)}
+          ref={activeSession?.id === selectedId ? selectedSessionRef : undefined}
+          type='button'
+        >
+          {indicator && <SessionStatusIndicator status={indicator} />}
+          <span>
+            <strong>{sessionLabel}</strong>
+          </span>
+        </button>
+      </Tooltip>
+    )
+  }
+
+  const menuSubject = contextMenu?.subject
 
   return (
     <aside
@@ -301,7 +393,7 @@ export function WorkspaceSidebar({
       <div className='brand'>
         <span className='brand-mark'>π</span>
         <div>
-          <strong>Pi Livecraft</strong>
+          <strong>Pi Local AI</strong>
           <small>Local workspaces</small>
         </div>
         <Tooltip label='Settings'>
@@ -341,15 +433,21 @@ export function WorkspaceSidebar({
             ? group.sessions
             : group.sessions.slice(0, visibleWorkspaceSessionCount)
           const listId = `workspace-section-${index}`
+          const archivedListId = `${listId}-archived`
+          const archiveOpen = archiveOpenPaths.has(group.path)
+          const workspaceSubject: ContextMenuSubject = { kind: 'workspace', group }
           return (
             <section className='workspace-section' key={group.path}>
               <div className='workspace-section-header'>
-                <Tooltip label={group.path}>
+                <Tooltip hint='Right-click to rename' label={group.path}>
                   <button
                     aria-controls={listId}
                     aria-expanded={!groupCollapsed}
+                    aria-haspopup='menu'
                     className='workspace-section-toggle'
                     onClick={() => toggleWorkspace(group.path)}
+                    onContextMenu={(event) => openContextMenu(workspaceSubject, event)}
+                    onKeyDown={(event) => openContextMenuFromKeyboard(workspaceSubject, event)}
                     type='button'
                   >
                     <ChevronIcon collapsed={groupCollapsed} />
@@ -371,54 +469,7 @@ export function WorkspaceSidebar({
               </div>
               {!groupCollapsed && (
                 <div className='session-list' id={listId}>
-                  {visibleSessions.map((recentSession) => {
-                    const activeSession = sessions.find((session) =>
-                      session.sessionPath === recentSession.sessionPath
-                      && session.status !== 'exited'
-                    )
-                    const indicator = sessionIndicator(
-                      activeSession,
-                      selectedId,
-                      compactingSessionIds,
-                      completedSessionIds,
-                    )
-                    const sessionLabel = openingSessionPath === recentSession.sessionPath
-                      ? 'Opening…'
-                      : recentSession.name
-                    const actionTarget: SessionActionTarget = {
-                      cwd: recentSession.cwd,
-                      name: recentSession.name,
-                      sessionId: activeSession?.id,
-                      sessionPath: recentSession.sessionPath,
-                    }
-                    return (
-                      <Tooltip
-                        key={recentSession.sessionPath}
-                        hint='Right-click to rename or close the session'
-                        label={`${recentSession.name}\n${
-                          new Date(recentSession.updatedAt).toLocaleString('en-US')
-                        }`}
-                      >
-                        <button
-                          aria-haspopup='menu'
-                          className={`session-item${
-                            activeSession?.id === selectedId ? ' selected' : ''
-                          }${indicator ? ` ${indicator}` : ''}`}
-                          disabled={openingSessionPath === recentSession.sessionPath}
-                          onContextMenu={(event) => openContextMenu(actionTarget, event)}
-                          onKeyDown={(event) => openContextMenuFromKeyboard(actionTarget, event)}
-                          onClick={() => openRow(recentSession)}
-                          ref={activeSession?.id === selectedId ? selectedSessionRef : undefined}
-                          type='button'
-                        >
-                          {indicator && <SessionStatusIndicator status={indicator} />}
-                          <span>
-                            <strong>{sessionLabel}</strong>
-                          </span>
-                        </button>
-                      </Tooltip>
-                    )
-                  })}
+                  {visibleSessions.map((recentSession) => renderSessionRow(recentSession, false))}
                   {hiddenSessionCount > 0 && (
                     <button
                       aria-controls={listId}
@@ -430,7 +481,32 @@ export function WorkspaceSidebar({
                       {expanded ? 'Show less' : `Show ${hiddenSessionCount} more`}
                     </button>
                   )}
-                  {group.sessions.length === 0 && (
+                  {group.archivedSessions.length > 0 && (
+                    <button
+                      aria-controls={archivedListId}
+                      aria-expanded={archiveOpen}
+                      className='session-list-more'
+                      onClick={() => toggleArchiveOpen(group.path)}
+                      type='button'
+                    >
+                      {archiveOpen
+                        ? 'Hide archived'
+                        : `Archived (${group.archivedSessions.length})`}
+                    </button>
+                  )}
+                  {archiveOpen && group.archivedSessions.length > 0 && (
+                    <div
+                      aria-label={`Archived sessions in ${group.name}`}
+                      className='session-list-archived'
+                      id={archivedListId}
+                      role='group'
+                    >
+                      {group.archivedSessions.map((recentSession) =>
+                        renderSessionRow(recentSession, true)
+                      )}
+                    </div>
+                  )}
+                  {group.sessions.length === 0 && group.archivedSessions.length === 0 && (
                     <p className='workspace-section-empty'>No saved sessions yet.</p>
                   )}
                 </div>
@@ -444,7 +520,7 @@ export function WorkspaceSidebar({
           </p>
         )}
       </nav>
-      {contextMenu && (
+      {menuSubject?.kind === 'session' && (
         <div
           aria-label='Session actions'
           className='session-context-menu'
@@ -455,24 +531,100 @@ export function WorkspaceSidebar({
           <button autoFocus onClick={startRename} role='menuitem' type='button'>
             Rename…
           </button>
-          {contextMenuSessionPath && contextMenu.target.sessionId && (
+          {menuSubject.target.sessionPath && (
             <button
-              className='danger'
-              onClick={() => void closeTarget()}
+              onClick={() => {
+                const { target } = menuSubject
+                const sessionPath = target.sessionPath ?? ''
+                runMenuAction(() =>
+                  menuSubject.archived
+                    ? onUnarchiveSession(sessionPath)
+                    : onArchiveSession(target)
+                )
+              }}
+              role='menuitem'
+              type='button'
+            >
+              {menuSubject.archived ? 'Unarchive' : 'Archive'}
+            </button>
+          )}
+          {menuSubject.target.sessionId && (
+            <button
+              onClick={() => {
+                const sessionId = menuSubject.target.sessionId ?? ''
+                runMenuAction(() => onCloseSession(sessionId))
+              }}
               role='menuitem'
               type='button'
             >
               Close session
             </button>
           )}
+          {menuSubject.target.sessionPath && (
+            <>
+              <hr aria-hidden='true' className='session-context-menu-separator' />
+              <button
+                className='danger'
+                onClick={() => startDelete(menuSubject.target)}
+                role='menuitem'
+                type='button'
+              >
+                Delete…
+              </button>
+            </>
+          )}
         </div>
       )}
-      {renameTarget && (
+      {menuSubject?.kind === 'workspace' && (
+        <div
+          aria-label='Workspace actions'
+          className='session-context-menu'
+          ref={contextMenuRef}
+          role='menu'
+          style={{ left: contextMenuPosition.left, top: contextMenuPosition.top }}
+        >
+          <button autoFocus onClick={startRename} role='menuitem' type='button'>
+            Rename workspace…
+          </button>
+          {menuSubject.group.customName && (
+            <button
+              onClick={() => {
+                const { path } = menuSubject.group
+                runMenuAction(() => onRenameWorkspace(path, ''))
+              }}
+              role='menuitem'
+              type='button'
+            >
+              Reset to folder name
+            </button>
+          )}
+        </div>
+      )}
+      {renameTarget?.kind === 'session' && (
+        <SessionRenameDialog
+          initialName={renameTarget.target.name}
+          key={renameTarget.target.sessionPath ?? renameTarget.target.sessionId
+            ?? renameTarget.target.name}
+          onClose={dismissRename}
+          onConfirm={(name) => onRenameSession(renameTarget.target, name)}
+        />
+      )}
+      {renameTarget?.kind === 'workspace' && (
         <SessionRenameDialog
           initialName={renameTarget.name}
-          key={renameTarget.sessionPath ?? renameTarget.sessionId ?? renameTarget.name}
+          key={renameTarget.path}
           onClose={dismissRename}
-          onConfirm={(name) => onRenameSession(renameTarget, name)}
+          onConfirm={async (name) => onRenameWorkspace(renameTarget.path, name)}
+          subject='workspace'
+        />
+      )}
+      {deleteTarget && (
+        <SessionDeleteDialog
+          key={deleteTarget.sessionPath}
+          name={deleteTarget.name}
+          running={Boolean(deleteTarget.sessionId)}
+          onClose={dismissDelete}
+          onConfirm={() => onDeleteSession(deleteTarget)}
         />
       )}
     </aside>

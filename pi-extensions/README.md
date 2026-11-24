@@ -4,7 +4,6 @@ These extensions are loaded into every persistent Pi session started by Pi Livec
 
 - `ask-user-question.ts` registers the structured questionnaire tool and bridges its versioned payload through Pi's extension UI protocol.
 - `plan.ts` registers the `update_plan` tool and returns the committed macro plan in its result `details`, which reach the browser without entering the model context.
-- `quotas.ts` registers the private `/livecraft-quotas` command and publishes normalized provider usage through a versioned status payload.
 
 `server/pi-process.ts` owns the extension paths. These modules use Pi's public extension API and shared protocols only; they do not define Pi Livecraft HTTP routes.
 
