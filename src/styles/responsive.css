@@ -166,12 +166,6 @@
 }
 
 @media (max-width: 480px) {
-  .brand-mark {
-    width: 35px;
-    height: 35px;
-    border-radius: 10px;
-    font-size: 22px;
-  }
   .sidebar-tool-primary span {
     display: none;
   }

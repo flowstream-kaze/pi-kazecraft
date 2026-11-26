@@ -2,8 +2,13 @@
 
 export const SIDEBAR_BANNER_KEY = 'pi-livecraft.sidebar-banner'
 
-/** Largest stored banner; browser storage holds about 5 MB per site and other preferences share it. */
-export const MAX_BANNER_DATA_URL_LENGTH = 1_500_000
+import {
+  isBannerDataUrl,
+  MAX_BANNER_DATA_URL_LENGTH,
+  type PreparedImage,
+} from '../../components/banner-image.ts'
+
+export { isBannerDataUrl, type PreparedImage } from '../../components/banner-image.ts'
 
 /** Images are scaled down to this box before they are stored; the sidebar shows them far smaller. */
 const MAX_BANNER_WIDTH = 1200
@@ -11,13 +16,6 @@ const MAX_BANNER_HEIGHT = 400
 
 /** Image types the banner accepts (what browsers display in an `<img>`). */
 export const BANNER_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/avif'
-
-/** Whether a stored value is a banner this app wrote: an image data URL within the size limit. */
-export function isBannerDataUrl(value: unknown): value is string {
-  return typeof value === 'string'
-    && /^data:image\/(?:png|jpeg|webp|gif|svg\+xml|avif);base64,[A-Za-z0-9+/=]+$/.test(value)
-    && value.length <= MAX_BANNER_DATA_URL_LENGTH
-}
 
 export function readSidebarBanner(): string | null {
   try {
@@ -50,25 +48,53 @@ export function storeSidebarBanner(dataUrl: string | null): void {
  * scaled down (a GIF keeps its animation only when it is already small enough); SVG is kept as is.
  */
 export async function prepareBannerImage(file: File): Promise<string> {
+  return (await prepareImage(file, { width: MAX_BANNER_WIDTH, height: MAX_BANNER_HEIGHT })).src
+}
+
+/**
+ * Turns a chosen file into a data URL no larger than `box`, keeping its proportions. Raster images
+ * are scaled down (never up) and saved as WebP, or PNG where WebP export is missing; SVG is kept as
+ * is. The returned size is the stored image's own size (for an SVG without one, a 3:1 default).
+ */
+export async function prepareImage(
+  file: File,
+  box: { width: number; height: number },
+): Promise<PreparedImage> {
   if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
   const original = await readAsDataUrl(file)
-  if (file.type === 'image/svg+xml') return checkedSize(original)
   const image = await loadImage(original)
-  const scale = Math.min(
-    1,
-    MAX_BANNER_WIDTH / image.naturalWidth,
-    MAX_BANNER_HEIGHT / image.naturalHeight,
-  )
-  if (scale === 1 && original.length <= MAX_BANNER_DATA_URL_LENGTH) return original
+  const naturalWidth = image.naturalWidth || 0
+  const naturalHeight = image.naturalHeight || 0
+  if (file.type === 'image/svg+xml') {
+    // An SVG without width/height reports no size; give it a banner-like box instead.
+    const width = naturalWidth || box.width
+    const height = naturalHeight || Math.round(box.width / 3)
+    const scale = Math.min(1, box.width / width, box.height / height)
+    return {
+      src: checkedSize(original),
+      width: Math.round(width * scale),
+      height: Math.round(height * scale),
+    }
+  }
+  if (!naturalWidth || !naturalHeight)
+    throw new Error('This image has no size the browser can read.')
+  const scale = Math.min(1, box.width / naturalWidth, box.height / naturalHeight)
+  if (scale === 1 && original.length <= MAX_BANNER_DATA_URL_LENGTH) {
+    return { src: original, width: naturalWidth, height: naturalHeight }
+  }
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+  canvas.width = Math.max(1, Math.round(naturalWidth * scale))
+  canvas.height = Math.max(1, Math.round(naturalHeight * scale))
   const context = canvas.getContext('2d')
   if (!context) throw new Error('This browser cannot resize the image.')
   context.drawImage(image, 0, 0, canvas.width, canvas.height)
   // WebP keeps transparency and stays small; PNG is the fallback where WebP export is missing.
   const webp = canvas.toDataURL('image/webp', 0.9)
-  return checkedSize(webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png'))
+  return {
+    src: checkedSize(webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png')),
+    width: canvas.width,
+    height: canvas.height,
+  }
 }
 
 function checkedSize(dataUrl: string): string {

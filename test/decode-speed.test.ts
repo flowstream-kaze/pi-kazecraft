@@ -80,6 +80,37 @@ test('uses the decode speed the model server measured for the reply', async () =
   assert.deepEqual(requested, ['http://127.0.0.1:8080/v1/status'])
 })
 
+test('behind llama-swap, asks the running model through /upstream', async () => {
+  const requested: string[] = []
+  const swapped = { ...reply, model: 'gemma-4-26b-a4b-ud-q4_k_m' }
+  const speed = await engineDecodeSpeed(swapped, polystrata, async (url) => {
+    requested.push(url.pathname)
+    if (url.pathname === '/v1/status') throw new Error('HTTP 404')
+    if (url.pathname === '/running') {
+      return { running: [{ model: 'gemma-4-26b-a4b-ud-q4_k_m', state: 'ready' }] }
+    }
+    return { last_timings: { predicted_n: 30, predicted_per_second: 41.26 } }
+  })
+  assert.equal(speed, 41.3)
+  assert.deepEqual(requested, [
+    '/v1/status',
+    '/running',
+    '/upstream/gemma-4-26b-a4b-ud-q4_k_m/v1/status',
+  ])
+})
+
+test('behind llama-swap, never asks /upstream for a model that is not loaded (it would swap it in)', async () => {
+  const requested: string[] = []
+  const swapped = { ...reply, model: 'gemma-4-26b-a4b-ud-q4_k_m' }
+  const speed = await engineDecodeSpeed(swapped, polystrata, async (url) => {
+    requested.push(url.pathname)
+    if (url.pathname === '/v1/status') throw new Error('HTTP 404')
+    return { running: [{ model: 'bonsai-2.5-27b', state: 'ready' }] }
+  })
+  assert.equal(speed, undefined)
+  assert.deepEqual(requested, ['/v1/status', '/running'])
+})
+
 test('rejects server timings that belong to another request or are missing', async () => {
   const otherRequest = async () => ({
     last_timings: { predicted_n: 12, predicted_per_second: 80 },

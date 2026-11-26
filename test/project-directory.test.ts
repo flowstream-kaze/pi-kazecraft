@@ -3,7 +3,23 @@ import { mkdtemp, realpath, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { projectDirectory, validProjectName } from '../server/project-directory.ts'
+import { isProjectFolder, projectDirectory, validProjectName } from '../server/project-directory.ts'
+
+test('only folders inside the projects root count as deletable project folders', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kazecraft-projects-'))
+  const outside = await mkdtemp(join(tmpdir(), 'kazecraft-outside-'))
+  try {
+    const project = await projectDirectory('Essay', root)
+    assert.equal(await isProjectFolder(project, root), true)
+    assert.equal(await isProjectFolder(root, root), false, 'the root itself')
+    assert.equal(await isProjectFolder(outside, root), false, 'a folder added from elsewhere')
+    assert.equal(await isProjectFolder(join(root, 'missing'), root), false, 'a missing folder')
+    await rmdir(project)
+  } finally {
+    await rmdir(root)
+    await rmdir(outside)
+  }
+})
 
 test('sessions with the same project name reuse its working folder', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kazecraft-project-'))

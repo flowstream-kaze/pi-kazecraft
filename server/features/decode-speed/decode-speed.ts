@@ -122,7 +122,20 @@ export async function engineDecodeSpeed(
   // after every reply, and such providers do not report engine timings anyway.
   if (!loopbackHosts.has(statusUrl.hostname)) return undefined
   try {
-    const status = await fetchStatus(statusUrl)
+    const status = await fetchStatus(statusUrl).catch(async (error: unknown) => {
+      // Behind llama-swap, /v1/status is not routed; the model's own server answers under
+      // /upstream/<model>/. Only a model llama-swap reports as running is asked, because asking
+      // /upstream for another one would load it and swap out the model in use.
+      const model = typeof message.model === 'string' ? message.model : ''
+      if (!model) throw error
+      const running = await fetchStatus(new URL('/running', baseUrl))
+      const loaded = isObject(running) && Array.isArray(running.running)
+        && running.running.some((entry) =>
+          isObject(entry) && entry.model === model && entry.state === 'ready'
+        )
+      if (!loaded) throw error
+      return fetchStatus(new URL(`/upstream/${encodeURIComponent(model)}/v1/status`, baseUrl))
+    })
     const timings = isObject(status) && isObject(status.last_timings)
       ? status.last_timings
       : undefined

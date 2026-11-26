@@ -13,6 +13,23 @@ semantics, and every item remains explicitly dismissible.
 Keep notification state and cross-feature policy in `App.tsx`. Keep presentation and colocated
 styles in this directory.
 
+## Notification sounds
+
+`sound-player.ts` plays short chimes synthesized with the Web Audio API (no audio files): a rising
+two-note chime when Pi finishes responding in the open session (`finished`), three quick notes when
+Pi stops for a question or an approval (`input`, any blocking `extension_ui_request` other than
+kazecraft's own agent picker), and one low note when a session you are not looking at finishes, or
+the open one finishes while the tab is hidden or unfocused (`background`). `finishedSoundKind`
+decides between the last two. Each can be turned off, with a shared volume, in Settings →
+Notifications, stored in `pi-livecraft.notification-sounds` (`notification-sounds.ts` parses it and
+is covered by `test/notification-sounds.test.ts`).
+
+`App.tsx` plays a chime only from the live event stream (`subscribeManagerEvents`); replayed events
+(reopening a session, catching up after a reconnect) never sound. The same chime is not repeated
+within 1.5 s. Browsers keep audio suspended until the page has had a click or key press, so
+`unlockNotificationSounds` resumes it on the first one; a chime before that is skipped, not queued.
+kazecraft has no scheduled tasks, so there is no sound for them.
+
 ## Tab attention
 
 `tab-attention.ts` owns the browser-tab completion badge: a red dot composited onto the current

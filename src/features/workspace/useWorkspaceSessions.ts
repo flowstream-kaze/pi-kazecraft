@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   closeSession as requestCloseSession,
   createSession,
+  deleteProject,
   deleteSession as deleteStoredSession,
   listRecentSessions,
   listSessions,
@@ -497,6 +498,47 @@ export function useWorkspaceSessions(
     [closeIfRunning, refreshSessions],
   )
 
+  /**
+   * Deletes a project: closes its running sessions, permanently deletes all its saved sessions,
+   * optionally moves its folder to the Recycle Bin, and removes its section from the sidebar.
+   */
+  const deleteWorkspace = useCallback(
+    async (path: string, deleteFolder: boolean): Promise<void> => {
+      for (const session of sessionsRef.current) {
+        if (session.cwd === path && session.status !== 'exited')
+          await closeManagedSession(session.id)
+      }
+      await deleteProject(path, deleteFolder)
+      const removedPaths = new Set(
+        [...recentSessions, ...sentSessions]
+          .filter((row) => row.cwd === path)
+          .map((row) => row.sessionPath),
+      )
+      setWorkspacePaths((current) => current.filter((candidate) => candidate !== path))
+      setWorkspaceNames((current) => {
+        if (!(path in current)) return current
+        const next = { ...current }
+        delete next[path]
+        return next
+      })
+      setCollapsedWorkspacePaths((current) =>
+        current.has(path) ? withoutPath(current, path) : current
+      )
+      setArchivedSessionPaths((current) =>
+        [...current].some((sessionPath) => removedPaths.has(sessionPath))
+          ? new Set([...current].filter((sessionPath) => !removedPaths.has(sessionPath)))
+          : current
+      )
+      setSentSessions((current) => current.filter((sent) => sent.cwd !== path))
+      if (activeWorkspacePath === path) {
+        window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY)
+        setActiveWorkspacePath('')
+      }
+      await refreshSessions()
+    },
+    [activeWorkspacePath, closeManagedSession, recentSessions, refreshSessions, sentSessions],
+  )
+
   /** Stores a sidebar-only workspace name; an empty name restores the folder name. */
   const renameWorkspace = useCallback((path: string, name: string): void => {
     const normalized = name.trim()
@@ -571,6 +613,7 @@ export function useWorkspaceSessions(
     createSessionInWorkspace,
     creatingSession,
     deleteManagedSession,
+    deleteWorkspace,
     groups,
     isRefreshingSessions,
     markSessionCompleted,

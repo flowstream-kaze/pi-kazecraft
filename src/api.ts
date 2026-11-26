@@ -88,6 +88,27 @@ export async function pickDirectory(cwd?: string): Promise<DirectoryPickResult> 
   })
 }
 
+export type ModelSwitchStatus =
+  | { managed: false }
+  | { managed: true; state: 'ready' | 'starting' | 'stopping' | 'unloaded'; busy: boolean }
+
+/** Where a model stands in llama-swap; `managed: false` when its server loads nothing on demand. */
+export async function getModelSwitchStatus(
+  provider: string,
+  model: string,
+): Promise<ModelSwitchStatus> {
+  const query = `provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`
+  return request<ModelSwitchStatus>(`/api/model-switch?${query}`)
+}
+
+/** Starts loading a model in llama-swap without sending it a message. */
+export async function preloadModel(provider: string, model: string): Promise<void> {
+  await request<{ managed: boolean }>('/api/model-switch/preload', {
+    method: 'POST',
+    body: JSON.stringify({ provider, model }),
+  })
+}
+
 /** Saves a document into the workspace's attachment folder and returns where it was saved. */
 export async function uploadAttachment(cwd: string, file: File): Promise<string> {
   const query = `cwd=${encodeURIComponent(cwd)}&name=${encodeURIComponent(file.name)}`
@@ -236,6 +257,33 @@ export async function deleteSession(cwd: string, sessionPath: string): Promise<v
   })
 }
 
+/** The folder new named projects are created in, and the host's path separator. */
+export async function getProjectsRoot(): Promise<{ path: string; separator: string }> {
+  return request('/api/projects/root')
+}
+
+/** What deleting a project removes: its saved sessions, and whether its folder may be recycled. */
+export interface ProjectDeleteInfo {
+  sessionCount: number
+  folderDeletable: boolean
+  /** The folder no longer exists; only the sidebar entry is left. */
+  missing?: boolean
+}
+
+export async function getProjectDeleteInfo(cwd: string): Promise<ProjectDeleteInfo> {
+  return request<ProjectDeleteInfo>(`/api/projects/delete-info?cwd=${encodeURIComponent(cwd)}`)
+}
+
+export async function deleteProject(
+  cwd: string,
+  deleteFolder: boolean,
+): Promise<{ deletedSessions: number; folderRecycled: boolean }> {
+  return request('/api/projects/delete', {
+    method: 'POST',
+    body: JSON.stringify({ cwd, deleteFolder }),
+  })
+}
+
 export async function getSnapshot(sessionId: string): Promise<SessionSnapshot> {
   return request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`)
 }
@@ -287,7 +335,7 @@ export async function readAloudAudio(
     throw new Error(
       isObject(value) && typeof value.error === 'string'
         ? value.error
-        : 'Paradee could not read this passage',
+        : 'Read aloud could not read this passage',
     )
   }
   return response.arrayBuffer()

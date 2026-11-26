@@ -5,20 +5,23 @@
 ## Architecture
 
 ```
-SettingsPanel (modal container, tab state)
-  ├── Tab bar (role="tablist")
-  │     ├── Tab button: Color themes
-  │     ├── Tab button: Text size
-  │     ├── Tab button: Sidebar
-  │     ├── Tab button: Terminal
-  │     └── Tab button: Shortcuts
-  └── Tab panels (role="tabpanel", one visible at a time)
-        ├── ThemeSettings (section component)
-        ├── TextSizeSettings (section component)
-        ├── SidebarSettings (section component)
-        ├── TerminalSettings (section component)
-        └── ShortcutsSettings (section component)
+SettingsPanel (modal container, tab state, search text)
+  ├── Header: "Settings" and the close button
+  ├── Body (two columns)
+  │     ├── Side list (nav)
+  │     │     ├── Search box: filters sections by label and keywords; Enter opens the first match
+  │     │     └── Section buttons (role="tablist", vertical), each with an icon
+  │     │           Color themes · Text size · Sidebar · Notifications · Terminal · Shortcuts
+  │     └── Content: the section title, then one panel (role="tabpanel")
+  │           ThemeSettings · TextSizeSettings · SidebarSettings · NotificationSettings ·
+  │           TerminalSettings · ShortcutsSettings
+  └── Footer: Reset shortcuts and Done
 ```
+
+Each entry in `settingsTabs` has an `id`, `label`, `icon`, and `keywords`, the words the search box
+also matches (put the names of the settings inside the section there). Settings that are a plain
+on/off choice use the `Toggle` switch inside a `settings-row` (title and description on the left,
+controls on the right), as the Notifications section does.
 
 `App.tsx` owns all persisted values and passes them into `SettingsPanel` through props. Section components receive only the values and callbacks they need; transient state (theme name being edited, shortcut being captured) lives in `SettingsPanel`.
 
@@ -29,6 +32,7 @@ SettingsPanel (modal container, tab state)
 | `themes` | Color themes | `ThemeSettings` | `themes`, `activeThemeId`, `onSelectTheme`, `onDuplicateTheme`, `onRenameTheme`, `onUpdateThemeColor`, `onDeleteTheme`, `onResetTheme` |
 | `text` | Text size | `TextSizeSettings` | `fontSizes`, `onFontSizesChange` |
 | `sidebar` | Sidebar | `SidebarSettings` | `bannerImage`, `onBannerChange` |
+| `notifications` | Notifications | `NotificationSettings` | `notificationSounds`, `onNotificationSoundsChange` |
 | `terminal` | Terminal | `TerminalSettings` | `terminalCommand`, `onTerminalCommandChange` |
 | `shortcuts` | Shortcuts | `ShortcutsSettings` | `definitions`, `shortcuts`, `onChange`, `onReset` |
 

@@ -5,6 +5,7 @@ import { join, sep } from 'node:path'
 import test from 'node:test'
 import {
   deletePiSession,
+  deletePiSessionsInWorkspace,
   listRecentPiSessions,
   PiSessionWorkspaceError,
   resolvePiSessionDirectory,
@@ -70,6 +71,21 @@ test('deletes a header-only session that never recorded a message', async () => 
 test('treats a session Pi never wrote to disk as already deleted', async () => {
   const { directory, workspace } = await fixture()
   await deletePiSession(join(directory, 'never-written.jsonl'), workspace, directory)
+})
+
+test('deleting a project removes every session of its folder and no other', async () => {
+  const { directory, workspace } = await fixture()
+  const otherWorkspace = await mkdtemp(join(tmpdir(), 'pi-workspace-'))
+  await mkdir(join(directory, 'nested'))
+  const own = [join(directory, 'one.jsonl'), join(directory, 'nested', 'two.jsonl')]
+  const other = join(directory, 'other.jsonl')
+  await writeSession(own[0], workspace, 'one', 'First')
+  await writeSession(own[1], workspace, 'two', 'Second')
+  await writeSession(other, otherWorkspace, 'other', 'Elsewhere')
+
+  assert.equal(await deletePiSessionsInWorkspace(await realpath(workspace), directory), 2)
+  for (const path of own) await assert.rejects(access(path))
+  await access(other)
 })
 
 test('refuses to delete a session recorded for another workspace', async () => {

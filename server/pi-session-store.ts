@@ -127,6 +127,29 @@ export async function deletePiSession(
   await rm(canonicalPath)
 }
 
+/** Every Pi session file recorded for `cwd` (a canonical path), across all of Pi storage. */
+export async function piSessionsInWorkspace(
+  cwd: string,
+  directory = sessionDirectory,
+): Promise<string[]> {
+  const files = await Promise.all(
+    (await listSessionFiles(directory)).map((path) => readPiSessionFile(path)),
+  )
+  return files
+    .filter((file): file is PiSessionFile => file !== null && file.cwd === cwd)
+    .map((file) => file.canonicalPath)
+}
+
+/** Permanently removes every session file of a workspace; returns how many were deleted. */
+export async function deletePiSessionsInWorkspace(
+  cwd: string,
+  directory = sessionDirectory,
+): Promise<number> {
+  const paths = await piSessionsInWorkspace(cwd, directory)
+  for (const path of paths) await deletePiSession(path, cwd, directory)
+  return paths.length
+}
+
 function assertInsideSessionDirectory(canonicalDirectory: string, canonicalPath: string): void {
   const relativePath = relative(canonicalDirectory, canonicalPath)
   if (!relativePath || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath))

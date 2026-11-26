@@ -26,6 +26,7 @@ import { PlanPanel } from './features/plan/PlanPanel.tsx'
 import { setTabAttention, tabUnwatched } from './features/notifications/tab-attention.ts'
 import { ToastStack, type Toast } from './features/notifications/ToastStack.tsx'
 import { sessionActivity, type PiConnection } from './features/conversation/activity.ts'
+import { type ReplyFailure, replyFailureFrom } from './features/conversation/reply-failure.ts'
 import { Conversation } from './features/conversation/Conversation.tsx'
 import {
   nextConversationView,
@@ -73,6 +74,17 @@ import {
   storeFontSizes,
 } from './features/settings/font-size-storage.ts'
 import { readSidebarBanner, storeSidebarBanner } from './features/workspace/sidebar-banner.ts'
+import {
+  finishedSoundKind,
+  type NotificationSoundKind,
+} from './features/notifications/notification-sounds.ts'
+import {
+  playChime,
+  readNotificationSounds,
+  storeNotificationSounds,
+  unlockNotificationSounds,
+} from './features/notifications/sound-player.ts'
+import { WelcomeBanner } from './components/WelcomeBanner.tsx'
 import { SettingsPanel, type SettingsTabId } from './features/settings/SettingsPanel.tsx'
 import {
   describeSessionStats,
@@ -109,6 +121,18 @@ const managerUnavailableToastDelayMs = 1_000
 function App() {
   // Workspace and sessions
   const [compactingSessionIds, setCompactingSessionIds] = useState<ReadonlySet<string>>(new Set())
+  /** Sessions whose last message got no reply, and why (shown above the message box). */
+  const [replyFailures, setReplyFailures] = useState<Readonly<Record<string, ReplyFailure>>>({})
+  /** The failed reply of a run still in progress; a later reply (a retry) clears it. */
+  const pendingReplyFailuresRef = useRef(new Map<string, ReplyFailure>())
+  const dismissReplyFailure = useCallback((sessionId: string): void => {
+    setReplyFailures((current) => {
+      if (!(sessionId in current)) return current
+      const next = { ...current }
+      delete next[sessionId]
+      return next
+    })
+  }, [])
 
   // Conversation and Pi lifecycle
   const [piConnection, setPiConnection] = useState<PiConnection>('connecting')
@@ -196,6 +220,10 @@ function App() {
     'session',
   )
   const [sidebarBanner, setSidebarBanner] = useState(() => readSidebarBanner())
+  const [notificationSounds, setNotificationSounds] = useState(() => readNotificationSounds())
+  const notificationSoundsRef = useRef(notificationSounds)
+  notificationSoundsRef.current = notificationSounds
+  useEffect(() => unlockNotificationSounds(), [])
   const [fontSizes, setFontSizes] = useState(() => readFontSizes())
   useEffect(() => applyFontSizes(document.documentElement, fontSizes), [fontSizes])
 
@@ -328,6 +356,7 @@ function App() {
     createSessionInWorkspace,
     creatingSession,
     deleteManagedSession,
+    deleteWorkspace,
     groups,
     isRefreshingSessions,
     markSessionCompleted,
@@ -596,8 +625,26 @@ function App() {
           : 'New session'
         renameSession(sessionId, name)
       }
-      if (event.type === 'agent_start') updateSession(sessionId, { status: 'running' })
+      if (event.type === 'agent_start') {
+        updateSession(sessionId, { status: 'running' })
+        pendingReplyFailuresRef.current.delete(sessionId)
+        dismissReplyFailure(sessionId)
+      }
+      // A reply that ended in an error is remembered until the run settles: Pi may still compact
+      // and retry, and a successful reply after it means there is nothing to report.
+      if (
+        event.type === 'message_end' && isObject(event.message)
+        && event.message.role === 'assistant'
+      ) {
+        const failure = replyFailureFrom(event.message)
+        if (failure) pendingReplyFailuresRef.current.set(sessionId, failure)
+        else if (event.message.stopReason !== 'aborted')
+          pendingReplyFailuresRef.current.delete(sessionId)
+      }
       if (event.type === 'agent_settled') {
+        const failure = pendingReplyFailuresRef.current.get(sessionId)
+        pendingReplyFailuresRef.current.delete(sessionId)
+        if (failure) setReplyFailures((current) => ({ ...current, [sessionId]: failure }))
         updateSession(sessionId, { status: 'idle' })
         markSessionCompleted(sessionId)
         if (tabUnwatched() && sessionId === selectedIdRef.current)
@@ -674,6 +721,7 @@ function App() {
     [
       addPendingRequest,
       clearActivity,
+      dismissReplyFailure,
       flushLiveUpdates,
       handlePiEvent,
       markSessionCompleted,
@@ -685,6 +733,20 @@ function App() {
     ],
   )
   replayPiEventRef.current = handleManagerPiEvent
+
+  /** Plays the notification chime a live Pi event calls for, if that sound is turned on. */
+  const playEventSound = useCallback((sessionId: string, event: JsonObject): void => {
+    const preferences = notificationSoundsRef.current
+    let kind: NotificationSoundKind | null = null
+    if (event.type === 'agent_settled') {
+      kind = finishedSoundKind(sessionId, selectedIdRef.current, !tabUnwatched())
+    } else if (
+      event.type === 'extension_ui_request' && isBlockingDialog(event) && !isAgentSelector(event)
+    ) {
+      kind = 'input'
+    }
+    if (kind && preferences.enabled[kind]) playChime(kind, preferences.volume)
+  }, [])
 
   useEffect(() =>
     subscribeManagerEvents((managerEvent) => {
@@ -701,12 +763,16 @@ function App() {
         managerEvent.event === 'manager_connected' || managerEvent.event === 'session_created'
         || managerEvent.event === 'session_exited' || managerEvent.event === 'session_reassigned'
       ) void refreshSessions()
-      if (managerEvent.event === 'pi' && isObject(managerEvent.data))
+      if (managerEvent.event === 'pi' && isObject(managerEvent.data)) {
         handleManagerPiEvent(
           managerEvent.sessionId,
           managerEvent.data,
           managerEvent.sequence,
         )
+        // Sounds come only from this live stream: replayed events (reopening a session, catching
+        // up after a reconnect) go through handleManagerPiEvent alone and stay silent.
+        playEventSound(managerEvent.sessionId, managerEvent.data)
+      }
     }, () => {
       resetEventSequence()
       setPiConnection('connecting')
@@ -716,6 +782,7 @@ function App() {
     clearActivity,
     clearManagerUnavailableToasts,
     handleManagerPiEvent,
+    playEventSound,
     refreshSessions,
     resetEventSequence,
     showToast,
@@ -1300,6 +1367,7 @@ function App() {
         onArchiveSession={archiveManagedSession}
         onCloseSession={closeManagedSession}
         onDeleteSession={deleteManagedSession}
+        onDeleteWorkspace={deleteWorkspace}
         onRenameWorkspace={renameWorkspace}
         onUnarchiveSession={unarchiveSession}
         onCreateInWorkspace={(path) => createSessionInWorkspace(path).then(() => undefined)}
@@ -1411,6 +1479,8 @@ function App() {
                         ? composerDraftRequest
                         : undefined}
                       onDraftApplied={markComposerDraftApplied}
+                      replyFailure={replyFailures[selectedSession.id]}
+                      onDismissReplyFailure={() => dismissReplyFailure(selectedSession.id)}
                       showAgentSelector={snapshotSessionId !== selectedSession.id
                         || snapshot.commands.some((command) => command.name === 'agent')}
                       running={selectedSession.status === 'running'}
@@ -1431,7 +1501,7 @@ function App() {
                     aria-live={loadingPhase !== 'exiting' ? 'polite' : undefined}
                     className={`welcome session-loading session-loading-${loadingPhase}`}
                   >
-                    <span className='brand-mark large brand-mark-loading'>π</span>
+                    <WelcomeBanner floating />
                     <h1>Connecting to Pi…</h1>
                     <p>Loading the session and its capabilities.</p>
                     <span aria-hidden='true' className='session-loading-indicator' />
@@ -1447,7 +1517,7 @@ function App() {
           ? (
             <>
               <section className='welcome' aria-busy='true'>
-                <span className='brand-mark large brand-mark-loading'>π</span>
+                <WelcomeBanner floating />
                 <h1>Starting new session…</h1>
                 <p>Initializing Pi and its agents.</p>
                 <span aria-hidden='true' className='session-loading-indicator' />
@@ -1458,8 +1528,8 @@ function App() {
           : (
             <>
               <section className='welcome'>
-                <span className='brand-mark large'>π</span>
-                <h1>Control Pi from your browser</h1>
+                <WelcomeBanner />
+                <h1>Your personal AI in a browser.</h1>
                 <p>Start a session or open one from your projects.</p>
                 <button
                   className='welcome-action'
@@ -1597,6 +1667,11 @@ function App() {
           shortcuts={shortcuts}
           terminalCommand={terminalCommand}
           fontSizes={fontSizes}
+          notificationSounds={notificationSounds}
+          onNotificationSoundsChange={(preferences) => {
+            setNotificationSounds(preferences)
+            storeNotificationSounds(preferences)
+          }}
           bannerImage={sidebarBanner}
           onBannerChange={(image) => {
             storeSidebarBanner(image)

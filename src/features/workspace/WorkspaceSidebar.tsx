@@ -12,6 +12,7 @@ import { PanelIcon } from '../../components/PanelIcon.tsx'
 import { Tooltip } from '../../components/Tooltip.tsx'
 import type { RecentSession, SessionSummary } from '../../../shared/types.ts'
 import { AddFolderDialog } from './AddFolderDialog.tsx'
+import { ProjectDeleteDialog } from './ProjectDeleteDialog.tsx'
 import { SidebarBanner } from './SidebarBanner.tsx'
 import { sessionIndicator } from './session-indicator.ts'
 import { SessionStatusIndicator } from './SessionStatusIndicator.tsx'
@@ -69,6 +70,8 @@ interface WorkspaceSidebarProps {
   onCloseSession: (sessionId: string) => Promise<void>
   onCreateInWorkspace: (path: string) => Promise<void>
   onDeleteSession: (target: SessionActionTarget) => Promise<void>
+  /** Deletes a project's sessions and section; `deleteFolder` also recycles its folder. */
+  onDeleteWorkspace: (path: string, deleteFolder: boolean) => Promise<void>
   onNewProject: () => void
   onNewSession: () => void
   onOpenSession: (row: RecentSession) => Promise<void>
@@ -106,6 +109,7 @@ export function WorkspaceSidebar({
   onCloseSession,
   onCreateInWorkspace,
   onDeleteSession,
+  onDeleteWorkspace,
   onNewProject,
   onNewSession,
   onOpenSession,
@@ -128,6 +132,7 @@ export function WorkspaceSidebar({
   const [groupByMenuOpen, setGroupByMenuOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SessionActionTarget | null>(null)
+  const [projectDeleteTarget, setProjectDeleteTarget] = useState<WorkspaceGroup | null>(null)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
   const [groupBy, setGroupBy] = useState<SidebarGroupBy>(readGroupBy)
   // Date and flat sections are not folders, so their collapse state stays in this view.
@@ -724,7 +729,7 @@ export function WorkspaceSidebar({
             <section className='workspace-section' key={section.key}>
               <div className='workspace-section-header'>
                 <Tooltip
-                  hint={group ? 'Right-click to rename' : undefined}
+                  hint={group ? 'Right-click to rename or delete' : undefined}
                   label={group ? group.path : section.name}
                 >
                   <button
@@ -1003,6 +1008,19 @@ export function WorkspaceSidebar({
               Reset to folder name
             </button>
           )}
+          <hr aria-hidden='true' className='session-context-menu-separator' />
+          <button
+            className='danger'
+            onClick={() => {
+              const { group } = menuSubject
+              dismissContextMenu()
+              setProjectDeleteTarget(group)
+            }}
+            role='menuitem'
+            type='button'
+          >
+            Delete project…
+          </button>
         </div>
       )}
       {renameTarget?.kind === 'session' && (
@@ -1030,6 +1048,21 @@ export function WorkspaceSidebar({
           running={Boolean(deleteTarget.sessionId)}
           onClose={dismissDelete}
           onConfirm={() => onDeleteSession(deleteTarget)}
+        />
+      )}
+      {projectDeleteTarget && (
+        <ProjectDeleteDialog
+          key={projectDeleteTarget.path}
+          name={projectDeleteTarget.name}
+          path={projectDeleteTarget.path}
+          running={sessions.some((session) =>
+            session.cwd === projectDeleteTarget.path && session.status !== 'exited'
+          )}
+          onClose={() => {
+            setProjectDeleteTarget(null)
+            contextMenuTriggerRef.current?.focus()
+          }}
+          onConfirm={(deleteFolder) => onDeleteWorkspace(projectDeleteTarget.path, deleteFolder)}
         />
       )}
       {bulkDeleteOpen && (

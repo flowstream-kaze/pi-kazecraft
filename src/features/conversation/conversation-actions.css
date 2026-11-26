@@ -81,12 +81,18 @@ pre.conversation-code-block {
   transform: translateY(0);
 }
 /* Always-visible actions under a message: ghost icons and quiet metadata, like a chat client. */
+/*
+ * Every item sits the same 14px from the next, measured between what you see: an icon's drawing
+ * or the text itself. Icon buttons are 28px boxes around a 15px icon, so they give back their
+ * 6.5px of empty margin on each side; the hover background still covers the whole button.
+ */
 .message-footer {
+  --footer-gap: 14px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  margin: -18px 0 22px;
+  gap: 4px var(--footer-gap);
+  margin: -18px 6.5px 22px;
   color: var(--muted);
 }
 .message-footer.user {
@@ -96,6 +102,7 @@ pre.conversation-code-block {
 .message-footer .conversation-action-button {
   width: 28px;
   height: 28px;
+  margin-inline: -6.5px;
   border-color: transparent;
   border-radius: 7px;
   background: transparent;
@@ -113,23 +120,19 @@ pre.conversation-code-block {
   color: var(--ink);
 }
 .message-footer-meta {
-  padding: 0 6px;
   color: var(--muted);
   font-size: 11.5px;
   white-space: nowrap;
 }
-/* Clock time first, then how long ago, on one row. */
+/* Clock time first, then how long ago, on one row, with the same gap as everything else. */
 .message-footer-time {
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--footer-gap);
 }
 .message-footer-clock {
   color: color-mix(in srgb, var(--ink) 70%, var(--muted));
   font-variant-numeric: tabular-nums;
-}
-.message-footer.assistant .message-footer-meta:first-of-type {
-  margin-left: 4px;
 }
 .tool-call > .conversation-actions {
   top: 5px;

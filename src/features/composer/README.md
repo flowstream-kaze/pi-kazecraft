@@ -35,6 +35,36 @@ templates stay available as `/name` commands in the slash menu.
 The composer shares the message column's width: its side margins use `--thread-inline` and
 `--thread-scrollbar` from `conversation.css`, the same values as the conversation's padding.
 
+## Model switching notice
+
+Behind llama-swap, picking a model is instant but loading it happens on the next request and can
+take tens of seconds. `useModelSwitch` (with `ModelSwitchNotice.tsx`) makes that visible:
+
+- Picking a model in `ModelSelect` asks the backend to preload it (`POST /api/model-switch/preload`,
+  `server/features/model-switch/`), so it loads while you type.
+- Sending a message checks the selected model too, since the message itself makes llama-swap load it.
+- Nothing shows when the model is already loaded or its server is not llama-swap on this machine
+  (`GET /api/model-switch` reports `managed: false`).
+- While it loads, a notice above the message box names the model, the usual load time and the
+  seconds elapsed, with a progress bar. It polls llama-swap's `/running` every second (`stopping`,
+  `starting`, `ready`) and shows "… is ready." briefly at the end; after 10 minutes it says the
+  load is taking unusually long.
+- Load times are learned per model in `pi-livecraft.model-load-seconds` (`model-switch.ts`): the
+  bar follows the estimate but stops below 95 % until the model is ready; the first load of a model
+  shows a sweeping bar instead. Covered by `test/model-switch-progress.test.ts` and
+  `test/model-switch.test.ts`.
+
+## No reply notice
+
+When a reply ends in an error and no later reply in the same run succeeds (Pi may compact and
+retry first), `App.tsx` keeps the failure per session and the composer shows `ReplyFailureNotice`
+above the message box until it is dismissed or the next message starts. A conversation too long
+for the model gets a plain explanation with both token counts; any other error shows the
+provider's text. This matters because Pi hides the error of a failed compact-and-retry, which
+otherwise left the conversation with no reply and no reason; for example, a conversation of a few
+very large messages that Pi cannot compact, switched to a model with a smaller context. The
+recognition is in `src/features/conversation/reply-failure.ts` (`test/reply-failure.test.ts`).
+
 ## Internal state
 
 - `message`, `images` — the draft; persisted to `localStorage` per session

@@ -239,31 +239,6 @@
   }
 }
 
-.brand-mark {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--sidebar-accent);
-  border-radius: 11px;
-  background: var(--sidebar-accent);
-  color: var(--on-sidebar-accent);
-  font: 500 23px ui-monospace, monospace;
-  box-shadow: 0 3px 0 var(--sidebar-accent-hover);
-}
-.brand > .brand-mark {
-  border-radius: 10px;
-  box-shadow: none;
-}
-.brand-mark.large {
-  width: 64px;
-  height: 64px;
-  margin: auto;
-  border-radius: 18px;
-  font-size: 38px;
-}
-
 .workspace-sections {
   display: flex;
   flex: 1;
@@ -710,6 +685,17 @@
   height: 18px;
   color: var(--sidebar-accent);
 }
+/* Where a new project's folder will be created. */
+.modal .new-session-destination {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.modal .new-session-destination code {
+  font-size: 11px;
+}
 .modal .new-session-hint {
   margin: 8px 0 0;
   color: var(--warning-strong);
@@ -962,6 +948,33 @@
 .session-delete-description strong {
   overflow-wrap: anywhere;
   color: var(--ink);
+}
+
+/* Delete project: the folder it lives in, and the choice to recycle it. */
+.project-delete-folder,
+.project-delete-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.project-delete-folder code {
+  overflow-wrap: anywhere;
+  font-size: 11.5px;
+}
+.project-delete-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.project-delete-option input {
+  margin: 2px 0 0;
+  accent-color: var(--danger);
 }
 .modal-actions button.primary.danger {
   border-color: var(--danger);

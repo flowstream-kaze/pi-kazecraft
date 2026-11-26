@@ -10,6 +10,7 @@ import {
   type WheelEvent,
 } from 'react'
 import type { JsonObject } from '../../../shared/types.ts'
+import { WelcomeBanner } from '../../components/WelcomeBanner.tsx'
 import type { Activity } from './activity.ts'
 import { turnUsageByMessage } from './message-usage.ts'
 import {
@@ -529,7 +530,7 @@ export function Conversation(
                 .length === 0
             && (
               <div className='empty-conversation'>
-                <span aria-hidden='true' className='brand-mark large'>π</span>
+                <WelcomeBanner />
                 <h2>Session ready</h2>
                 <p>Send a message or use a command from your Pi installation.</p>
               </div>

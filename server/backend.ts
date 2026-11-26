@@ -4,14 +4,22 @@ import { dirname, extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { ManagerClient } from './manager-client.ts'
-import { projectDirectory, validProjectName } from './project-directory.ts'
-import { renderSpeech } from './features/read-aloud/paradee.ts'
+import {
+  isProjectFolder,
+  projectDirectory,
+  projectsRoot,
+  validProjectName,
+} from './project-directory.ts'
+import { recycleFolder } from './recycle-folder.ts'
+import { renderSpeech } from './features/read-aloud/speech.ts'
 import { defaultVoice, isReadAloudVoice } from '../shared/read-aloud-voices.ts'
 import { ManagerRuntimeMonitor } from './manager-runtime-monitor.ts'
 import {
   deletePiSession,
+  deletePiSessionsInWorkspace,
   listRecentPiSessions,
   loadPiSession,
+  piSessionsInWorkspace,
   PiSessionWorkspaceError,
 } from './pi-session-store.ts'
 import {
@@ -37,6 +45,7 @@ import {
   replyKey,
 } from './features/decode-speed/decode-speed.ts'
 import { AttachmentError, saveAttachment } from './features/attachments/attachments.ts'
+import { modelSwitchStatus, preloadModel } from './features/model-switch/model-switch.ts'
 import { openTerminalApplication, TerminalTemplateError } from './features/terminal/launcher.ts'
 import {
   loadWorkspaceTodos,
@@ -234,6 +243,24 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
 
+  if (method === 'GET' && url.pathname === '/api/model-switch') {
+    // Where a provider's model stands in llama-swap (stopping, starting, ready), for the loading notice.
+    const providers = await readProviderBaseUrls()
+    const baseUrl = providers.get(url.searchParams.get('provider') ?? '')
+    sendJson(response, 200, await modelSwitchStatus(baseUrl, url.searchParams.get('model') ?? ''))
+    return
+  }
+
+  if (method === 'POST' && url.pathname === '/api/model-switch/preload') {
+    // Starts loading a model as soon as it is picked, so the swap happens while the user types.
+    const body = await readJsonBody(request)
+    const provider = typeof body.provider === 'string' ? body.provider : ''
+    const model = typeof body.model === 'string' ? body.model : ''
+    const providers = await readProviderBaseUrls()
+    sendJson(response, 202, { managed: await preloadModel(providers.get(provider), model) })
+    return
+  }
+
   if (method === 'POST' && url.pathname === '/api/attachments') {
     // Raw file bytes; the workspace and original name travel in the query string.
     const workspace = await resolveWorkingDirectory(url.searchParams.get('cwd') ?? '')
@@ -421,6 +448,57 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       sessionPath: session.sessionPath,
     })
     sendJson(response, 200, { name: body.name.trim() })
+    return
+  }
+
+  // What deleting a project would remove: its saved sessions, and whether its folder may go to
+  // the Recycle Bin (only folders inside the projects root).
+  // Where a named project's folder is created, so the New project dialog can say so.
+  if (method === 'GET' && url.pathname === '/api/projects/root') {
+    sendJson(response, 200, { path: projectsRoot(), separator: sep })
+    return
+  }
+
+  // A folder that no longer exists has no sessions Pi can list; removing it from the sidebar is
+  // all that is left to do, so both routes answer as if there were nothing to delete.
+  if (method === 'GET' && url.pathname === '/api/projects/delete-info') {
+    const cwd = await existingDirectory(url.searchParams.get('cwd') ?? '')
+    if (!cwd) {
+      sendJson(response, 200, { sessionCount: 0, folderDeletable: false, missing: true })
+      return
+    }
+    const [sessions, folderDeletable] = await Promise.all([
+      piSessionsInWorkspace(cwd),
+      isProjectFolder(cwd),
+    ])
+    sendJson(response, 200, {
+      sessionCount: sessions.length,
+      folderDeletable: folderDeletable && process.platform === 'win32',
+    })
+    return
+  }
+
+  if (method === 'POST' && url.pathname === '/api/projects/delete') {
+    const body = await readJsonBody(request)
+    if (typeof body.cwd !== 'string' || !body.cwd.trim())
+      throw new HttpError(400, 'Project folder is required')
+    const cwd = await existingDirectory(body.cwd)
+    if (!cwd) {
+      sendJson(response, 200, { deletedSessions: 0, folderRecycled: false, missing: true })
+      return
+    }
+    // Running Pi processes still write to their files; the browser closes them first.
+    const liveSessions = await manager.request({ action: 'list' })
+    if (
+      Array.isArray(liveSessions)
+      && liveSessions.some((live) => isObject(live) && live.cwd === cwd && live.status !== 'exited')
+    ) throw new HttpError(409, 'Close the project\'s running sessions before deleting it')
+    if (body.deleteFolder === true && !(await isProjectFolder(cwd))) {
+      throw new HttpError(400, 'Only project folders inside the projects folder can be deleted')
+    }
+    const deletedSessions = await deletePiSessionsInWorkspace(cwd)
+    const folderRecycled = body.deleteFolder === true ? await recycleFolder(cwd) : false
+    sendJson(response, 200, { deletedSessions, folderRecycled })
     return
   }
 
@@ -630,6 +708,16 @@ function arrayData(response: JsonObject, key: string): JsonObject[] {
 }
 
 /** Canonicalizes a client-provided path and rejects missing paths or non-directories. */
+/** The canonical folder, or null when it does not exist (other failures still throw). */
+async function existingDirectory(input: string): Promise<string | null> {
+  try {
+    return await resolveWorkingDirectory(input)
+  } catch (error) {
+    if (error instanceof HttpError && /does not exist/.test(error.message)) return null
+    throw error
+  }
+}
+
 async function resolveWorkingDirectory(input: string): Promise<string> {
   const trimmed = input.trim()
   if (!trimmed) throw new HttpError(400, 'Working directory is required')

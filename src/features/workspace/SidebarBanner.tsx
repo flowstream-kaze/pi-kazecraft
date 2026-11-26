@@ -1,9 +1,22 @@
+import { useState } from 'react'
+
 /**
  * The sidebar banner: the user's image, or the built-in Pi banner drawn in the theme's colours so it
  * follows every theme without an image file.
  */
 export function SidebarBanner({ image }: { image: string | null }) {
-  if (image) return <img alt='Sidebar banner' className='sidebar-banner-image' src={image} />
+  // A stored image the browser cannot show falls back to the built-in banner instead of a broken one.
+  const [failedSrc, setFailedSrc] = useState('')
+  if (image && image !== failedSrc) {
+    return (
+      <img
+        alt='Sidebar banner'
+        className='sidebar-banner-image'
+        onError={() => setFailedSrc(image)}
+        src={image}
+      />
+    )
+  }
   return <DefaultBanner />
 }
 

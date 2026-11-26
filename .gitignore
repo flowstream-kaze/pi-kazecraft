@@ -7,3 +7,5 @@ dist/
 !.env.example
 .idea/
 .DS_Store
+# Python byte code from the read-aloud worker
+__pycache__/

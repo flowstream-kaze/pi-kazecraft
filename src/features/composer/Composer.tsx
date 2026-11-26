@@ -20,6 +20,10 @@ import {
 } from '../../../shared/attachments.ts'
 import { uploadAttachment } from '../../api.ts'
 import { ContextChip } from './ContextChip.tsx'
+import { ModelSwitchNotice } from './ModelSwitchNotice.tsx'
+import { ReplyFailureNotice } from './ReplyFailureNotice.tsx'
+import type { ReplyFailure } from '../conversation/reply-failure.ts'
+import { useModelSwitch } from './useModelSwitch.ts'
 import { maxComposerImages, prepareComposerImage, type ComposerImage } from './composer-images.ts'
 import {
   parseBuiltinCommand,
@@ -58,6 +62,8 @@ export const Composer = memo(function Composer({
   focusRequest,
   draftRequest,
   onDraftApplied,
+  replyFailure,
+  onDismissReplyFailure,
 }: {
   session: SessionSummary
   snapshot: SessionSnapshot
@@ -88,6 +94,9 @@ export const Composer = memo(function Composer({
   focusRequest?: number
   draftRequest?: { id: string; message: string }
   onDraftApplied?: (id: string) => void
+  /** Why the last message got no reply, if it did not. */
+  replyFailure?: ReplyFailure
+  onDismissReplyFailure?: () => void
 }) {
   const draftStorageKey = `pi-livecraft.composer-draft.${session.id}`
   const [message, setMessage] = useState(() => readComposerDraft(draftStorageKey))
@@ -118,6 +127,23 @@ export const Composer = memo(function Composer({
   )
   const modelInput = selectedModel?.input ?? model?.input
   const supportsImages = Array.isArray(modelInput) && modelInput.includes('image')
+  const modelSwitch = useModelSwitch()
+  const trackModelSwitch = modelSwitch.track
+  /** Picking a model starts loading it right away, with a notice while it loads. */
+  const handleModelCommand = useCallback(async (command: JsonObject): Promise<JsonObject> => {
+    const result = await onCommand(command)
+    if (
+      command.type === 'set_model' && typeof command.provider === 'string'
+      && typeof command.modelId === 'string'
+    ) {
+      const picked = snapshot.models.find((item) =>
+        item.provider === command.provider && item.id === command.modelId
+      )
+      const name = typeof picked?.name === 'string' ? picked.name : command.modelId
+      trackModelSwitch(command.provider, command.modelId, name, { preload: true })
+    }
+    return result
+  }, [onCommand, snapshot.models, trackModelSwitch])
   const thinking = typeof snapshot.state?.thinkingLevel === 'string'
     ? snapshot.state.thinkingLevel
     : 'off'
@@ -262,6 +288,14 @@ export const Composer = memo(function Composer({
     setDraftMessage('')
     setImages([])
     setDocuments([])
+    // The message itself makes llama-swap load the model if it is not loaded; say so while it does.
+    if (
+      !builtinPending && model && typeof model.provider === 'string' && typeof model.id === 'string'
+    ) {
+      const name = typeof selectedModel?.name === 'string' ? selectedModel.name : model.id
+      if (modelSwitch.current?.key !== `${model.provider}/${model.id}`)
+        trackModelSwitch(model.provider, model.id, name)
+    }
     try {
       if (builtinPending) {
         await onBuiltinCommand(builtinPending)
@@ -386,6 +420,24 @@ export const Composer = memo(function Composer({
             </div>
           ))}
         </div>
+      )}
+      {modelSwitch.current && (
+        <ModelSwitchNotice
+          change={modelSwitch.current}
+          onDismiss={modelSwitch.dismiss}
+        />
+      )}
+      {replyFailure && !modelSwitch.current && (
+        <ReplyFailureNotice
+          failure={replyFailure}
+          modelName={String(
+            snapshot
+              .models
+              .find((item) => `${item.provider}/${item.id}` === replyFailure.model)
+              ?.name ?? '',
+          )}
+          onDismiss={() => onDismissReplyFailure?.()}
+        />
       )}
       {(documents.length > 0 || uploadingDocuments > 0) && (
         <div aria-label='Files to send' className='composer-documents'>
@@ -559,7 +611,7 @@ export const Composer = memo(function Composer({
             <ModelSelect
               models={snapshot.models}
               currentModel={currentModel}
-              onCommand={onCommand}
+              onCommand={handleModelCommand}
               onError={onError}
               open={openSelect === 'model'}
               onOpenChange={handleModelOpenChange}

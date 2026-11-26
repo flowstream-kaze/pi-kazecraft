@@ -94,14 +94,9 @@
   color: var(--ink);
   text-wrap: balance;
 }
-.empty-conversation .brand-mark.large {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 14px;
-  border-radius: 16px;
-  font-size: 32px;
-  box-shadow: 0 2px 0 var(--accent-hover);
-  opacity: 0.92;
+/* In an empty session the banner fills the narrower column, with the heading close under it. */
+.empty-conversation .welcome-banner + h2 {
+  margin-top: 12px;
 }
 .empty-conversation h2 {
   margin-bottom: 8px;
@@ -162,6 +157,22 @@
   .welcome-action {
     transition: none;
   }
+}
+/*
+ * The welcome banner. WelcomeBanner sets its width (at most 460 px, the width of the heading
+ * under it at 36 px Segoe UI) and its aspect ratio; a narrower column shrinks it in proportion.
+ */
+.welcome-banner {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+}
+/* The heading sits close under the banner; the π mark on the loading screens keeps the wider gap. */
+.welcome .welcome-banner + h1 {
+  margin-top: 12px;
 }
 .welcome h1 {
   margin: 22px 0 10px;

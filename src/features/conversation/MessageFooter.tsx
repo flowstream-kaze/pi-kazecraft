@@ -32,7 +32,7 @@ export function RelativeTime({ detail, time }: { detail?: string; time: Date }) 
   )
 }
 
-/** Reads a reply with local Paradee speech; a second click stops it. */
+/** Reads a reply with local Kokoro-82M speech; a second click stops it. */
 export function ReadAloudButton(
   { text, onError }: { text: string; onError: (cause: unknown) => void },
 ) {

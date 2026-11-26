@@ -117,7 +117,7 @@ export function AddFolderDialog({ existingPaths, onAdd, onClose, onError }: AddF
               setPath(event.target.value)
               if (error) setError('')
             }}
-            placeholder='~/projects or /absolute/path'
+            placeholder='Paste or type a folder path'
             ref={inputRef}
             value={path}
           />

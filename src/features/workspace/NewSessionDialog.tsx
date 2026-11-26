@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { listDirectories, pickDirectory } from '../../api.ts'
+import { getProjectsRoot, listDirectories, pickDirectory } from '../../api.ts'
 import { directoryCompletionTarget } from './directory-completion.ts'
 
 interface NewSessionDialogProps {
@@ -40,6 +40,22 @@ export function NewSessionDialog(
   const dialogRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const [projectsRoot, setProjectsRoot] = useState<{ path: string; separator: string } | null>(
+    null,
+  )
+
+  // Only used to say where a new project's folder will be; the dialog works without it.
+  useEffect(() => {
+    let current = true
+    getProjectsRoot()
+      .then((root) => {
+        if (current) setProjectsRoot(root)
+      })
+      .catch(() => undefined)
+    return () => {
+      current = false
+    }
+  }, [])
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement
@@ -226,6 +242,22 @@ export function NewSessionDialog(
                 }}
               />
             </label>
+            {projectsRoot && (
+              <p className='new-session-destination'>
+                {path.trim()
+                  ? 'The project uses the folder below.'
+                  : (
+                    <>
+                      New folder:{' '}
+                      <code>
+                        {projectsRoot.path}
+                        {projectsRoot.separator}
+                        {name.trim() || 'General'}
+                      </code>
+                    </>
+                  )}
+              </p>
+            )}
             <details className='new-session-location'>
               <summary>Use an existing folder</summary>
               <div className='new-session-folder'>
@@ -254,7 +286,7 @@ export function NewSessionDialog(
                   id='new-session-path'
                   onChange={(event) => updatePath(event.target.value)}
                   onKeyDown={handlePathKeyDown}
-                  placeholder='~/projects or /absolute/path'
+                  placeholder='Paste or type a folder path'
                   ref={inputRef}
                   role='combobox'
                   value={path}
