@@ -1,3 +1,4 @@
+import type { ReadAloudVoice } from '../shared/read-aloud-voices.ts'
 import type {
   DirectoryListing,
   DirectoryPickResult,
@@ -8,7 +9,6 @@ import type {
   GitSnapshot,
   JsonObject,
   ManagerEvent,
-  PromptTemplate,
   RecentSession,
   SessionSnapshot,
   SessionSummary,
@@ -86,6 +86,17 @@ export async function pickDirectory(cwd?: string): Promise<DirectoryPickResult> 
     method: 'POST',
     body: JSON.stringify({ cwd }),
   })
+}
+
+/** Saves a document into the workspace's attachment folder and returns where it was saved. */
+export async function uploadAttachment(cwd: string, file: File): Promise<string> {
+  const query = `cwd=${encodeURIComponent(cwd)}&name=${encodeURIComponent(file.name)}`
+  const { path } = await request<{ path: string }>(`/api/attachments?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  })
+  return path
 }
 
 export async function openExplorer(cwd: string): Promise<void> {
@@ -185,23 +196,10 @@ export async function revertGitCommit(cwd: string, hash: string): Promise<GitRev
   })
 }
 
-/** Persists a draft using Pi's project or user prompt-template convention. */
-export async function savePrompt(
-  cwd: string,
-  scope: 'global' | 'project',
-  name: string,
-  content: string,
-): Promise<PromptTemplate> {
-  return request<PromptTemplate>('/api/prompts', {
-    method: 'POST',
-    body: JSON.stringify({ cwd, scope, name, content }),
-  })
-}
-
-export async function createSession(cwd: string): Promise<SessionSummary> {
+export async function createSession(cwd: string, projectName?: string): Promise<SessionSummary> {
   return request<SessionSummary>('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ cwd }),
+    body: JSON.stringify(projectName === undefined ? { cwd } : { projectName }),
   })
 }
 
@@ -242,21 +240,6 @@ export async function getSnapshot(sessionId: string): Promise<SessionSnapshot> {
   return request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`)
 }
 
-/** Requests an isolated rewrite without adding the draft or result to the active Pi session. */
-export async function improvePrompt(
-  sessionId: string,
-  prompt: string,
-  direction?: string,
-): Promise<{ prompt: string; cost?: number }> {
-  return request<{ prompt: string; cost?: number }>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/prompt-improvement`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ prompt, direction }),
-    },
-  )
-}
-
 /** Configuration for an isolated Pi prompt execution. */
 export interface RunPromptOptions {
   prompt: string
@@ -286,6 +269,28 @@ export async function sendPiCommand(sessionId: string, command: JsonObject): Pro
     method: 'POST',
     body: JSON.stringify(command),
   })
+}
+
+export async function readAloudAudio(
+  text: string,
+  signal: AbortSignal,
+  voice: ReadAloudVoice,
+): Promise<ArrayBuffer> {
+  const response = await fetch('/api/read-aloud', {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice }),
+  })
+  if (!response.ok) {
+    const value: unknown = await response.json()
+    throw new Error(
+      isObject(value) && typeof value.error === 'string'
+        ? value.error
+        : 'Paradee could not read this passage',
+    )
+  }
+  return response.arrayBuffer()
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

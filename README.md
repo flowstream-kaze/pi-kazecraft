@@ -34,7 +34,7 @@ You configure Pi as usual. Livecraft just calls it instead of keeping a second p
 
 Sadly, a terminal can't (yet) do it all. A browser is handy for the parts that benefit from space and interactivity: graphs, small buttons, and advanced interactions (images, videos, 3D?).
 
-For example, I embedded a **Session Analysis widget** that lets you monitor usage, token consumption, and cost in real time, as well as identify the costliest tool calls based on multiple criteria.
+For example, I embedded a **Session Analysis widget** that lets you monitor usage and token consumption in real time, as well as identify the largest tool calls based on multiple criteria.
 
 > "But I can do that in the terminal"
 
@@ -91,9 +91,9 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 - **Workspace sections and parallel sessions:** start a session in any folder the host can browse, then find it again under a collapsible section named after that folder. Create, switch, reopen, and monitor Pi sessions across workspaces; running and newly completed sessions stay visible with their status
 
-- **A Pi-native composer:** send text and images, use slash commands, stop a request, choose the models, thinking levels, and saved prompts exposed by Pi, and steer or queue follow-ups while Pi is working
+- **A Pi-native composer:** send text and images, use slash commands, stop a request, choose the models and thinking levels exposed by Pi, watch context usage, and steer or queue follow-ups while Pi is working
 
-- **Isolated prompts:** run a one-off Pi prompt from a widget, command, or anywhere really. By default it uses the cheapest available model in your Pi installation, returns one answer, and does not add anything to the active conversation
+- **Isolated prompts:** run a one-off Pi prompt from a widget, command, or anywhere really. By default it uses the current session's model, returns one answer, and does not add anything to the active conversation
 
 - **Extension dialogs:** handle Pi's standard select, confirm, input, and editor requests, plus structured questionnaires from Livecraft extensions
 
@@ -101,7 +101,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 ### See what Pi is doing
 
-- **Live conversations:** responses, activity, tool execution, usage, costs, errors, updates, notifications... I mean, everything Pi sends, Livecraft sees
+- **Live conversations:** responses, activity, tool execution, usage, decode speed, errors, updates, notifications... I mean, everything Pi sends, Livecraft sees
 
 - **Enhanced tool call rendering:** allow for complex (or simpler) tool call rendering. As an example, HTML, SVG, Markdown, and CSV will render directly, with the source still available and colorized with just a click
 

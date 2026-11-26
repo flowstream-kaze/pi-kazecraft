@@ -23,6 +23,8 @@ interface WorkspaceSessionsOptions {
 }
 
 interface StartSessionOptions {
+  projectName?: string
+  reportErrorInDialog?: boolean
   draftMessage?: string
   initialMessage?: string
   /** Whether selecting the launched session may reopen its collapsed section. */
@@ -234,6 +236,23 @@ export function useWorkspaceSessions(
     })
   }, [])
 
+  /** Collapses or expands every listed workspace section at once (sidebar Collapse/Expand all). */
+  const setWorkspacesCollapsed = useCallback(
+    (paths: readonly string[], collapsed: boolean): void => {
+      setCollapsedWorkspacePaths((current) => {
+        const next = new Set(current)
+        for (const path of paths) {
+          if (collapsed) next.add(path)
+          else next.delete(path)
+        }
+        return next.size === current.size && [...next].every((path) => current.has(path))
+          ? current
+          : next
+      })
+    },
+    [],
+  )
+
   /** Stores the optimistic title shared by first prompts in new and existing sessions. */
   const nameSessionFromFirstPrompt = useCallback(
     (session: SessionSummary, message: string): void => {
@@ -283,6 +302,7 @@ export function useWorkspaceSessions(
         }
         return session
       } catch (cause) {
+        if (options.reportErrorInDialog) throw cause
         onError(cause)
         return null
       } finally {
@@ -304,11 +324,11 @@ export function useWorkspaceSessions(
   const createSessionInWorkspace = useCallback(
     async (cwd: string, options: StartSessionOptions = {}): Promise<SessionSummary | null> => {
       const session = await startAndSelectSession(
-        () => createSession(cwd),
-        { ...options, revealSection: false },
+        () => createSession(cwd, options.projectName),
+        { revealSection: false, ...options },
       )
       // Only a real session makes the folder worth keeping as an empty section.
-      if (session) addWorkspacePath(cwd)
+      if (session) addWorkspacePath(session.cwd)
       return session
     },
     [addWorkspacePath, startAndSelectSession],
@@ -420,17 +440,38 @@ export function useWorkspaceSessions(
     await refreshSessions()
   }, [refreshSessions, selectSession])
 
+  /**
+   * Restarts the Pi process behind a session on the same history, so Pi loads its extensions, skills,
+   * prompts and models again. Opens the file directly: the session list may still show the closed process.
+   */
+  const reloadManagedSession = useCallback(async (sessionId: string): Promise<void> => {
+    const session = sessionsRef.current.find((candidate) => candidate.id === sessionId)
+    if (!session?.sessionPath) throw new Error('This session has nothing saved to reload yet.')
+    const { cwd, sessionPath } = session
+    await requestCloseSession(sessionId)
+    const reopened = await startAndSelectSession(() => requestOpenSession(cwd, sessionPath))
+    if (!reopened) throw new Error('Pi could not be restarted for this session.')
+  }, [startAndSelectSession])
+
+  /** Closes the target's Pi process when it still runs; a retry after a failure skips it. */
+  const closeIfRunning = useCallback(async (target: SessionActionTarget): Promise<void> => {
+    const running = sessionsRef.current.some((session) =>
+      session.id === target.sessionId && session.status !== 'exited'
+    )
+    if (running && target.sessionId) await closeManagedSession(target.sessionId)
+  }, [closeManagedSession])
+
   /** Closes a running session, then moves its row under the section's archived list. */
   const archiveManagedSession = useCallback(
     async (target: SessionActionTarget): Promise<void> => {
       const { sessionPath } = target
       if (!sessionPath) throw new Error('Session path is unavailable')
-      if (target.sessionId) await closeManagedSession(target.sessionId)
+      await closeIfRunning(target)
       setArchivedSessionPaths((current) =>
         current.has(sessionPath) ? current : new Set(current).add(sessionPath)
       )
     },
-    [closeManagedSession],
+    [closeIfRunning],
   )
 
   /** Returns an archived row to the regular session list without opening it. */
@@ -445,7 +486,7 @@ export function useWorkspaceSessions(
     async (target: SessionActionTarget): Promise<void> => {
       const { sessionPath } = target
       if (!sessionPath) throw new Error('Session path is unavailable')
-      if (target.sessionId) await closeManagedSession(target.sessionId)
+      await closeIfRunning(target)
       await deleteStoredSession(target.cwd, sessionPath)
       setArchivedSessionPaths((current) =>
         current.has(sessionPath) ? withoutPath(current, sessionPath) : current
@@ -453,7 +494,7 @@ export function useWorkspaceSessions(
       setSentSessions((current) => current.filter((sent) => sent.sessionPath !== sessionPath))
       await refreshSessions()
     },
-    [closeManagedSession, refreshSessions],
+    [closeIfRunning, refreshSessions],
   )
 
   /** Stores a sidebar-only workspace name; an empty name restores the folder name. */
@@ -522,6 +563,7 @@ export function useWorkspaceSessions(
   return {
     activatePreviousWorkspace,
     addPendingRequest,
+    addWorkspacePath,
     archiveManagedSession,
     closeManagedSession,
     collapsedWorkspacePaths,
@@ -536,6 +578,7 @@ export function useWorkspaceSessions(
     newSessionDialogOpen,
     openSessionRow,
     refreshSessions,
+    reloadManagedSession,
     removePendingRequest,
     renameManagedSession,
     renameSession,
@@ -544,6 +587,7 @@ export function useWorkspaceSessions(
     selectedId,
     sessions,
     setNewSessionDialogOpen,
+    setWorkspacesCollapsed,
     selectSession,
     toggleWorkspaceCollapsed,
     unarchiveSession,

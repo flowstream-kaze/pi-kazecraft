@@ -88,21 +88,49 @@ export async function loadPiSession(path: string): Promise<RecentSession> {
     realpath(path),
     realpath(sessionDirectory),
   ])
-  const relativePath = relative(canonicalDirectory, canonicalPath)
-  if (!relativePath || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath))
-    throw new Error('Pi session file must be stored in the Pi session directory')
+  assertInsideSessionDirectory(canonicalDirectory, canonicalPath)
   const session = await readPiSession(canonicalPath, (await stat(canonicalPath)).mtimeMs)
   if (!session) throw new Error('Invalid Pi session file')
   return session
 }
 
+/** Raised when a session file exists but was recorded for another working directory. */
+export class PiSessionWorkspaceError extends Error {
+  constructor() {
+    super('Pi session does not belong to this working directory')
+    this.name = 'PiSessionWorkspaceError'
+  }
+}
+
 /**
- * Permanently removes a session file. Pi documents deleting the `.jsonl` file as the way to
- * remove a session; the containment check of `loadPiSession` keeps the deletion inside Pi storage.
+ * Permanently removes a session file; Pi documents deleting the `.jsonl` file as the way to
+ * remove a session. The file must sit in Pi storage and belong to `cwd`. Pi writes the file only
+ * once the session records its first entry, so a missing file leaves nothing to delete and a
+ * header-only file is deleted like any other.
  */
-export async function deletePiSession(path: string): Promise<void> {
-  const session = await loadPiSession(path)
-  await rm(session.sessionPath)
+export async function deletePiSession(
+  path: string,
+  cwd: string,
+  directory = sessionDirectory,
+): Promise<void> {
+  let canonicalPath: string
+  try {
+    canonicalPath = await realpath(path)
+  } catch (error) {
+    if (isNotFound(error)) return
+    throw error
+  }
+  assertInsideSessionDirectory(await realpath(directory), canonicalPath)
+  const file = await readPiSessionFile(canonicalPath)
+  if (!file) throw new Error('Invalid Pi session file')
+  if (file.cwd !== cwd) throw new PiSessionWorkspaceError()
+  await rm(canonicalPath)
+}
+
+function assertInsideSessionDirectory(canonicalDirectory: string, canonicalPath: string): void {
+  const relativePath = relative(canonicalDirectory, canonicalPath)
+  if (!relativePath || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath))
+    throw new Error('Pi session file must be stored in the Pi session directory')
 }
 
 /** Recursively scans Pi storage while retaining only session JSONL files. */

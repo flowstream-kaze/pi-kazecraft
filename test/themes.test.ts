@@ -37,6 +37,7 @@ test('applyThemePalette clears stale derived inline variables', () => {
 
   assert.equal(set['--canvas'], BUILT_IN_THEMES[1].palette.canvas)
   assert.equal(set['--secondary'], BUILT_IN_THEMES[1].palette.secondary)
+  assert.equal(set['--sidebar-accent'], BUILT_IN_THEMES[1].palette['sidebar-accent'])
   assert.ok(removed.includes('--surface-raised'))
   assert.ok(removed.includes('--sidebar'))
   assert.ok(removed.includes('--teal'))
@@ -54,6 +55,29 @@ test('parseThemePreferences migre le legacy dark', () => {
   const result = parseThemePreferences(null, 'dark')
   assert.equal(result.active, 'dark')
   assert.deepEqual(result.themes, [])
+})
+
+test('parseThemePreferences migre une palette legacy et default sidebar-accent vers accent', () => {
+  const legacyPalette = {
+    canvas: '#fafafc',
+    surface: '#ffffff',
+    ink: '#1d2924',
+    accent: '#23776d',
+    violet: '#6851a4',
+    success: '#28734b',
+    warning: '#b8860b',
+    danger: '#a13f37',
+  }
+  const result = parseThemePreferences(
+    {
+      active: 'legacy',
+      themes: [{ id: 'legacy', name: 'Legacy', mode: 'light', palette: legacyPalette }],
+    },
+    null,
+  )
+  assert.equal(result.themes.length, 1)
+  assert.equal(result.themes[0].palette.secondary, '#6851a4')
+  assert.equal(result.themes[0].palette['sidebar-accent'], '#23776d')
 })
 
 test('parseThemePreferences ignore le legacy quand une préférence valide existe', () => {
@@ -116,9 +140,11 @@ test('les thèmes intégrés sont disponibles par défaut', () => {
     'Néon',
     'GiPiTy',
     'AntTropik',
+    'Claude Light',
     'Acid Pop',
   ])
-  assert.equal(allThemes(basePrefs).length, 6)
+  assert.equal(allThemes(basePrefs).length, 7)
+  assert.equal(resolveActiveTheme({ active: 'claude-light', themes: [] }).palette.canvas, '#faf9f5')
   assert.equal(resolveActiveTheme({ active: 'neon', themes: [] }).mode, 'dark')
   assert.equal(resolveActiveTheme({ active: 'acidpop', themes: [] }).palette.secondary, '#99ff33')
   assert.equal(setActiveTheme(basePrefs, 'neon').active, 'neon')

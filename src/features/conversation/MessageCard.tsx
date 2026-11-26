@@ -1,33 +1,54 @@
 import { memo, type ReactNode } from 'react'
 import type { JsonObject } from '../../../shared/types.ts'
 import { isObject } from '../../../shared/is-object.ts'
+import { Tooltip } from '../../components/Tooltip.tsx'
 import { CopyButton } from './CopyButton.tsx'
-import { ForkButton } from './ForkButton.tsx'
+import { EditButton, RewindButton } from './ForkButton.tsx'
 import { Markdown } from './Markdown.tsx'
 import { hasVisibleContent, messageText, reasoningTextForDisplay } from './message-display.ts'
-import { formatTokens, formatTurnCost, type MessageUsage } from './message-usage.ts'
+import { decodeTokensPerSecond, formatDecodeSpeed, replyTime } from './message-usage.ts'
+import { MessageFooter, ReadAloudButton, RelativeTime } from './MessageFooter.tsx'
+
+type ForkAction = (entryId: string) => Promise<boolean>
 
 /** Renders a visible protocol message with the default or custom presentation. */
 export const MessageCard = memo(
   function MessageCard(
-    { message, onError, onFork }: {
+    { copyInResponseBar = false, message, onError, onFork, onRewind }: {
+      /** The reply's response bar offers the copy action, so the card does not repeat it. */
+      copyInResponseBar?: boolean
       message: JsonObject
       onError: (cause: unknown) => void
-      onFork: (entryId: string) => Promise<boolean>
+      /** Forks before a user message and places it in the composer for editing. */
+      onFork: ForkAction
+      /** Forks before a user message and sends it again. */
+      onRewind: ForkAction
     },
   ) {
+    if (message.role === 'custom' && message.customType === 'compaction')
+      return <CompactionMessage message={message} />
     if (message.role === 'custom' && typeof message.customType === 'string')
       return <DefaultCustomMessage message={message} />
-    return <DefaultMessageCard message={message} onError={onError} onFork={onFork} />
+    return (
+      <DefaultMessageCard
+        copyInResponseBar={copyInResponseBar}
+        message={message}
+        onError={onError}
+        onFork={onFork}
+        onRewind={onRewind}
+      />
+    )
   },
 )
 
 const DefaultMessageCard = memo(
   function DefaultMessageCard(
-    { message, onError, onFork }: {
+    { copyInResponseBar, message, onError, onFork, onRewind }: {
+      copyInResponseBar: boolean
       message: JsonObject
       onError: (cause: unknown) => void
-      onFork: (entryId: string) => Promise<boolean>
+      onFork: ForkAction
+      onRewind: ForkAction
     },
   ) {
     const role = String(message.role)
@@ -37,26 +58,37 @@ const DefaultMessageCard = memo(
     const forkEntryId = role === 'user' && typeof message.forkEntryId === 'string'
       ? message.forkEntryId
       : undefined
-    return (
+    // A reply without a response bar (still streaming, or interrupted) keeps a hover copy action.
+    const hoverCopyText = role !== 'user' && !copyInResponseBar ? text : ''
+    const card = (
       <article className={`message ${role}`}>
-        {(text || forkEntryId) && (
+        {hoverCopyText && (
           <div className='conversation-actions message-actions'>
-            {forkEntryId && <ForkButton entryId={forkEntryId} onError={onError} onFork={onFork} />}
-            {text && <CopyButton label='Copy message' onError={onError} value={text} />}
+            <CopyButton label='Copy message' onError={onError} value={hoverCopyText} />
           </div>
         )}
         <div className='content'>
           {renderContent(message.content ?? message.output, message.role, onError)}
         </div>
-        {role === 'user' && time && (
-          <time
-            className='message-time'
-            dateTime={time.toISOString()}
-          >
-            {time.toLocaleTimeString(navigator.language, { hour: '2-digit', minute: '2-digit' })}
-          </time>
-        )}
       </article>
+    )
+    if (role !== 'user') return card
+    return (
+      <>
+        {card}
+        <MessageFooter side='user'>
+          {time && <RelativeTime time={time} />}
+          {forkEntryId && (
+            <RewindButton
+              entryId={forkEntryId}
+              onError={onError}
+              onFork={onRewind}
+            />
+          )}
+          {forkEntryId && <EditButton entryId={forkEntryId} onError={onError} onFork={onFork} />}
+          {text && <CopyButton label='Copy message' onError={onError} value={text} />}
+        </MessageFooter>
+      </>
     )
   },
 )
@@ -74,33 +106,54 @@ function DefaultCustomMessage({ message }: { message: JsonObject & { customType?
   )
 }
 
-/** Displays counters billed by Pi for a completed assistant response. */
-export function TurnUsage({ turnNumber, usage }: { turnNumber?: number; usage: MessageUsage }) {
+/** Shows a compaction summary as one collapsed line; a click expands the full summary. */
+function CompactionMessage({ message }: { message: JsonObject }) {
   return (
-    <dl className='turn-usage'>
-      {turnNumber !== undefined && (
-        <div>
-          <dt>Turn</dt>
-          <dd>{turnNumber}</dd>
-        </div>
+    <details className='message custom-message compaction-message'>
+      <summary>
+        <span className='compaction-chevron' aria-hidden='true' />
+        <span>Conversation compacted</span>
+        <span className='compaction-hint'>Show summary</span>
+      </summary>
+      <div className='content'>
+        {hasVisibleContent(message.content)
+          ? renderContent(message.content, message.role)
+          : <p>The summary is empty.</p>}
+      </div>
+    </details>
+  )
+}
+
+/**
+ * Closes a finished assistant reply with always-visible actions: copy the reply text (never its
+ * thinking), read it aloud, the decode speed the backend measured, and when it finished.
+ */
+export function ResponseBar(
+  { message, onError, turnNumber }: {
+    message: JsonObject
+    onError: (cause: unknown) => void
+    turnNumber?: number
+  },
+) {
+  const speed = decodeTokensPerSecond(message)
+  const time = replyTime(message)
+  const text = messageText(message.content)
+  return (
+    <MessageFooter side='assistant'>
+      {text && <CopyButton label='Copy reply' onError={onError} value={text} />}
+      {text && <ReadAloudButton text={text} onError={onError} />}
+      {speed !== undefined && (
+        <Tooltip label='Decode speed: how fast the model wrote this reply'>
+          <span className='message-footer-meta'>{formatDecodeSpeed(speed)}</span>
+        </Tooltip>
       )}
-      <div>
-        <dt>Cost</dt>
-        <dd>{formatTurnCost(usage.cost)}</dd>
-      </div>
-      <div>
-        <dt>Cache read</dt>
-        <dd>{formatTokens(usage.cacheRead)}</dd>
-      </div>
-      <div>
-        <dt>Cache miss</dt>
-        <dd>{formatTokens(usage.cacheMiss)}</dd>
-      </div>
-      <div>
-        <dt>Output</dt>
-        <dd>{formatTokens(usage.output)}</dd>
-      </div>
-    </dl>
+      {time && (
+        <RelativeTime
+          detail={turnNumber === undefined ? undefined : `Turn ${turnNumber}`}
+          time={time}
+        />
+      )}
+    </MessageFooter>
   )
 }
 

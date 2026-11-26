@@ -1,5 +1,7 @@
-.ask-user-question, .composer {
+.ask-user-question {
   width: min(900px, calc(100% - 48px));
+}
+.ask-user-question, .composer {
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow);

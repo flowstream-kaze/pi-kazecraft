@@ -9,8 +9,11 @@ import { listDirectories, pickDirectory } from '../../api.ts'
 import { directoryCompletionTarget } from './directory-completion.ts'
 
 interface NewSessionDialogProps {
+  /** `project` (the sidebar's New project) hides the existing-project choice. */
+  mode?: 'session' | 'project'
   onClose: () => void
-  onCreate: (path: string) => Promise<void>
+  projects: readonly { path: string; name: string }[]
+  onCreate: (path: string, name: string) => Promise<void>
   onError: (cause: unknown) => void
 }
 
@@ -20,9 +23,13 @@ interface NewSessionDialogProps {
  * provide any native dialog.
  */
 export function NewSessionDialog(
-  { onClose, onCreate, onError }: NewSessionDialogProps,
+  { mode = 'session', projects, onClose, onCreate, onError }: NewSessionDialogProps,
 ) {
+  const projectMode = mode === 'project'
   const [path, setPath] = useState('')
+  const [existingProject, setExistingProject] = useState('')
+  const [name, setName] = useState('')
+  const nameRef = useRef<HTMLInputElement>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [activeSuggestion, setActiveSuggestion] = useState(-1)
   const [browsing, setBrowsing] = useState(false)
@@ -38,7 +45,7 @@ export function NewSessionDialog(
     previousFocusRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
-    inputRef.current?.focus()
+    nameRef.current?.focus()
     return () => previousFocusRef.current?.focus()
   }, [])
 
@@ -124,7 +131,7 @@ export function NewSessionDialog(
     }
     if (event.key !== 'Tab') return
     const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      'button:not(:disabled), select:not(:disabled), summary, input:not(:disabled), [tabindex]:not([tabindex="-1"])',
     )
     if (!focusable?.length) return
     const first = focusable[0]
@@ -140,17 +147,19 @@ export function NewSessionDialog(
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
-    const candidate = path.trim()
-    if (!candidate) {
-      setError('Choose a workspace folder first.')
-      inputRef.current?.focus()
-      return
-    }
     setError('')
     setCreating(true)
     try {
-      const directory = await listDirectories(candidate)
-      await onCreate(directory.path)
+      const directory = existingProject
+        || (path.trim() ? (await listDirectories(path.trim())).path : '')
+      const projectName = existingProject ? '' : name.trim()
+      const prior = projects.find(project => project.path === directory)
+      if (prior && projectName && projectName !== prior.name) {
+        throw new Error(
+          `This folder already belongs to ${prior.name}. Select that project or choose another folder.`,
+        )
+      }
+      await onCreate(directory, projectName)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create the session.')
     } finally {
@@ -177,79 +186,121 @@ export function NewSessionDialog(
         role='dialog'
       >
         <header className='new-session-heading'>
-          <h2 id='new-session-title'>New session</h2>
-          <p>A new Pi session starts in the folder you pick.</p>
+          <h2 id='new-session-title'>{projectMode ? 'New project' : 'New session'}</h2>
         </header>
-        <div className='new-session-folder'>
-          <button
-            className='new-session-browse'
-            disabled={busy}
-            onClick={() => void browse()}
-            type='button'
-          >
-            <FolderIcon />
-            {browsing ? 'Opening…' : 'Choose workspace folder…'}
-          </button>
-          <p className='new-session-or'>Or type a path</p>
-          <input
-            aria-activedescendant={activeSuggestion >= 0
-              ? `new-session-suggestion-${activeSuggestion}`
-              : undefined}
-            aria-autocomplete='list'
-            aria-controls={suggestions.length > 0 ? 'new-session-suggestions' : undefined}
-            aria-expanded={suggestions.length > 0}
-            aria-invalid={Boolean(error)}
-            autoComplete='off'
-            aria-label='Workspace folder path'
-            className='directory-path-input'
-            disabled={busy}
-            id='new-session-path'
-            onChange={(event) => updatePath(event.target.value)}
-            onKeyDown={handlePathKeyDown}
-            placeholder='~/projects or /absolute/path'
-            ref={inputRef}
-            role='combobox'
-            value={path}
-          />
-          {pickerUnavailable && (
-            <p className='new-session-hint'>
-              No system folder dialog is available. Type the path instead.
-            </p>
-          )}
-          {suggestions.length > 0 && (
-            <div
-              aria-label='Directory suggestions'
-              className='directory-suggestions'
-              id='new-session-suggestions'
-              role='listbox'
+        {projects.length > 0 && !projectMode && (
+          <label className='new-session-field'>
+            Project
+            <select
+              className='directory-path-input'
+              value={existingProject}
+              disabled={busy}
+              onChange={event => {
+                setExistingProject(event.target.value)
+                setError('')
+              }}
             >
-              {suggestions.map((suggestion, index) => (
-                <div
-                  aria-selected={index === activeSuggestion}
-                  className={index === activeSuggestion ? 'active' : undefined}
-                  id={`new-session-suggestion-${index}`}
-                  key={suggestion}
-                  onClick={() => {
-                    updatePath(suggestion)
-                    setActiveSuggestion(-1)
-                  }}
-                  onMouseDown={(event) => event.preventDefault()}
-                  role='option'
-                >
-                  {suggestion}
-                </div>
+              <option value=''>New project</option>
+              {projects.map(project => (
+                <option key={project.path} value={project.path}>{project.name}</option>
               ))}
-            </div>
-          )}
-          <p className='directory-path-hint'>
-            Tab completes · ↑↓ navigate · Esc cancels
-          </p>
-        </div>
+            </select>
+          </label>
+        )}
+        {!existingProject && (
+          <>
+            <label className='new-session-field'>
+              Project name (optional)
+              <input
+                ref={nameRef}
+                className='directory-path-input'
+                disabled={busy}
+                maxLength={100}
+                value={name}
+                placeholder={path.trim()
+                  ? 'Use folder name'
+                  : 'General'}
+                onChange={event => {
+                  setName(event.target.value)
+                  setError('')
+                }}
+              />
+            </label>
+            <details className='new-session-location'>
+              <summary>Use an existing folder</summary>
+              <div className='new-session-folder'>
+                <button
+                  className='new-session-browse'
+                  disabled={busy}
+                  onClick={() => void browse()}
+                  type='button'
+                >
+                  <FolderIcon />
+                  {browsing ? 'Opening…' : 'Choose folder…'}
+                </button>
+                <p className='new-session-or'>Or type a path</p>
+                <input
+                  aria-activedescendant={activeSuggestion >= 0
+                    ? `new-session-suggestion-${activeSuggestion}`
+                    : undefined}
+                  aria-autocomplete='list'
+                  aria-controls={suggestions.length > 0 ? 'new-session-suggestions' : undefined}
+                  aria-expanded={suggestions.length > 0}
+                  aria-invalid={Boolean(error)}
+                  autoComplete='off'
+                  aria-label='Project folder path'
+                  className='directory-path-input'
+                  disabled={busy}
+                  id='new-session-path'
+                  onChange={(event) => updatePath(event.target.value)}
+                  onKeyDown={handlePathKeyDown}
+                  placeholder='~/projects or /absolute/path'
+                  ref={inputRef}
+                  role='combobox'
+                  value={path}
+                />
+                {pickerUnavailable && (
+                  <p className='new-session-hint'>
+                    No system folder dialog is available. Type the path instead.
+                  </p>
+                )}
+                {suggestions.length > 0 && (
+                  <div
+                    aria-label='Directory suggestions'
+                    className='directory-suggestions'
+                    id='new-session-suggestions'
+                    role='listbox'
+                  >
+                    {suggestions.map((suggestion, index) => (
+                      <div
+                        aria-selected={index === activeSuggestion}
+                        className={index === activeSuggestion ? 'active' : undefined}
+                        id={`new-session-suggestion-${index}`}
+                        key={suggestion}
+                        onClick={() => {
+                          updatePath(suggestion)
+                          setActiveSuggestion(-1)
+                        }}
+                        onMouseDown={(event) => event.preventDefault()}
+                        role='option'
+                      >
+                        {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className='directory-path-hint'>
+                  Tab completes · ↑↓ navigate · Esc cancels
+                </p>
+              </div>
+            </details>
+          </>
+        )}
         {error && <p className='new-session-error' id='new-session-error' role='alert'>{error}</p>}
         <div className='modal-actions'>
           <button disabled={busy} onClick={onClose} type='button'>Cancel</button>
-          <button className='primary' disabled={busy || !path.trim()} type='submit'>
-            {creating ? 'Starting…' : 'New session'}
+          <button className='primary' disabled={busy} type='submit'>
+            {creating ? 'Starting…' : projectMode ? 'Create project' : 'New session'}
           </button>
         </div>
       </form>

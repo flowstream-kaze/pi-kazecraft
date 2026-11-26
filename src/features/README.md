@@ -4,7 +4,7 @@ Start with the area that owns the behavior. Read `App.tsx` only when state coord
 
 ## Conversation loop
 
-- `workspace/` groups sessions into collapsible workspace sections and creates, reopens, or switches them. See [workspace and sessions](/src/features/workspace/README.md).
+- `workspace/` groups sessions into collapsible project sections and creates, reopens, or switches them. See [workspace and sessions](/src/features/workspace/README.md).
 - `composer/` prepares prompts, images, slash commands, and per-session drafts. See [composer](/src/features/composer/README.md).
 - `conversation/` owns the selected session's snapshot, live-event replay, streaming state, activity, usage, tool calls, file previews, and contextual message/tool actions. See [conversation](/src/features/conversation/README.md), [conversation actions](/docs/HOW-TO-CONVERSATION-ACTION.md), and [tool presentations](/docs/HOW-TO-TOOL-PRESENTATION.md).
 - `plan/` shows the macro plan Pi committed for the current task above the composer. See [plan](/src/features/plan/README.md).
@@ -16,7 +16,8 @@ Start with the area that owns the behavior. Read `App.tsx` only when state coord
 - `settings/` edits local preferences exposed to the user. See [settings and preferences](/src/features/settings/README.md).
 - `notifications/` displays transient notices, persistent errors, and the browser-tab completion marker. See [notifications](/src/features/notifications/README.md).
 - `manager/` reports manager runtime changes and offers the [guarded manual restart](/src/features/manager/README.md).
-- `right-sidebar/` composes workspace widgets and rail actions. See [right sidebar](/src/features/right-sidebar/README.md).
+- `right-sidebar/` composes workspace widgets, rail actions, the conversation view menu, and the collapse control. See [right sidebar](/src/features/right-sidebar/README.md).
+- `top-bar/` heads the open conversation with its name and folder. See [session top bar](/src/features/top-bar/README.md).
 
 ## Workspace widgets
 

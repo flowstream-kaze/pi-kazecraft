@@ -1,16 +1,51 @@
 import { useEffect, useState } from 'react'
 import { Tooltip } from '../../components/Tooltip.tsx'
 
-interface ForkButtonProps {
+interface BranchButtonProps {
   entryId: string
   onError: (cause: unknown) => void
+  /** Forks before the message; resolves false when Pi cancels the fork. */
   onFork: (entryId: string) => Promise<boolean>
 }
 
-/** Forks the active Pi session and reports cancellation through its tooltip. */
-export function ForkButton({ entryId, onError, onFork }: ForkButtonProps) {
+const actions = {
+  edit: {
+    idle: 'Edit message',
+    busy: 'Opening the message for editing',
+    done: 'Edit it in the composer',
+    cancelled: 'Edit cancelled',
+    icon: (
+      <path
+        d='M10.5 2.5 13.5 5.5 6 13H3v-3l7.5-7.5ZM9 4l3 3'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+    ),
+  },
+  rewind: {
+    idle: 'Rewind and resend',
+    busy: 'Rewinding',
+    done: 'Sent again',
+    cancelled: 'Rewind cancelled',
+    icon: (
+      <>
+        <path d='M3.5 8a4.5 4.5 0 1 0 1.4-3.3' strokeLinecap='round' />
+        <path d='M4.5 1.8v3h3' strokeLinecap='round' strokeLinejoin='round' />
+      </>
+    ),
+  },
+} as const
+
+/**
+ * Forks the Pi session before a user message. Editing places the prompt in the composer;
+ * rewinding sends it again so the conversation continues from that point.
+ */
+function BranchButton(
+  { action, entryId, onError, onFork }: BranchButtonProps & { action: keyof typeof actions },
+) {
   const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'forked' | 'cancelled'>('idle')
+  const [status, setStatus] = useState<'idle' | 'done' | 'cancelled'>('idle')
+  const copy = actions[action]
 
   useEffect(() => {
     if (status === 'idle') return
@@ -18,10 +53,10 @@ export function ForkButton({ entryId, onError, onFork }: ForkButtonProps) {
     return () => window.clearTimeout(timeout)
   }, [status])
 
-  async function forkConversation(): Promise<void> {
+  async function run(): Promise<void> {
     setBusy(true)
     try {
-      setStatus(await onFork(entryId) ? 'forked' : 'cancelled')
+      setStatus(await onFork(entryId) ? 'done' : 'cancelled')
     } catch (cause) {
       onError(cause)
     } finally {
@@ -29,30 +64,28 @@ export function ForkButton({ entryId, onError, onFork }: ForkButtonProps) {
     }
   }
 
-  const label = busy
-    ? 'Forking conversation'
-    : status === 'forked'
-    ? 'Conversation forked'
-    : status === 'cancelled'
-    ? 'Fork cancelled'
-    : 'Fork conversation from this message'
-
+  const label = busy ? copy.busy : status === 'idle' ? copy.idle : copy[status]
   return (
     <Tooltip label={label}>
       <button
         aria-label={label}
         className='conversation-action-button'
         disabled={busy}
-        onClick={() => void forkConversation()}
+        onClick={() => void run()}
         type='button'
       >
         <svg aria-hidden='true' fill='none' stroke='currentColor' viewBox='0 0 16 16'>
-          <circle cx='4' cy='3' r='1.5' />
-          <circle cx='12' cy='5' r='1.5' />
-          <circle cx='4' cy='13' r='1.5' />
-          <path d='M4 4.5v7M5.5 9c3.5 0 5-1 5-2.5' strokeLinecap='round' />
+          {copy.icon}
         </svg>
       </button>
     </Tooltip>
   )
+}
+
+export function EditButton(props: BranchButtonProps) {
+  return <BranchButton action='edit' {...props} />
+}
+
+export function RewindButton(props: BranchButtonProps) {
+  return <BranchButton action='rewind' {...props} />
 }

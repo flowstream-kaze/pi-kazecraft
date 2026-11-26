@@ -80,11 +80,56 @@ pre.conversation-code-block {
   pointer-events: auto;
   transform: translateY(0);
 }
-.message.user:has(> .message-actions) {
-  padding-right: 48px;
+/* Always-visible actions under a message: ghost icons and quiet metadata, like a chat client. */
+.message-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: -18px 0 22px;
+  color: var(--muted);
 }
-.message.user:has(> .message-actions > :nth-child(2)) {
-  padding-right: 80px;
+.message-footer.user {
+  justify-content: flex-end;
+  margin-top: -20px;
+}
+.message-footer .conversation-action-button {
+  width: 28px;
+  height: 28px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  transition: background 180ms ease, color 180ms ease, transform 100ms ease-out;
+}
+.message-footer .conversation-action-button svg {
+  width: 15px;
+  height: 15px;
+}
+.message-footer .conversation-action-button:hover:not(:disabled),
+.message-footer .conversation-action-button[aria-pressed="true"] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+.message-footer-meta {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+/* Clock time first, then how long ago, on one row. */
+.message-footer-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.message-footer-clock {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
+  font-variant-numeric: tabular-nums;
+}
+.message-footer.assistant .message-footer-meta:first-of-type {
+  margin-left: 4px;
 }
 .tool-call > .conversation-actions {
   top: 5px;
@@ -95,12 +140,6 @@ pre.conversation-code-block {
 .tool-call:has(> .conversation-actions > .open-file-action)
   > .tool-call-heading {
   padding-right: 112px;
-}
-@media (hover: hover) {
-  .message.user:has(> .message-actions),
-  .message.user:has(> .message-actions > :nth-child(2)) {
-    padding-right: 16px;
-  }
 }
 @media (hover: none) {
   .conversation-actions,

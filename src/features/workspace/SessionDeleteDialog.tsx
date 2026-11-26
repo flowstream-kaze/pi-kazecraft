@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 
 interface SessionDeleteDialogProps {
   name: string
+  /** More than one session (the sidebar's selection); `name` is then ignored. */
+  count?: number
   /** Whether a Pi process still runs the session; it is closed before deletion. */
   running: boolean
   onClose: () => void
@@ -10,8 +12,9 @@ interface SessionDeleteDialogProps {
 
 /** Confirms the permanent removal of a session's history file. */
 export function SessionDeleteDialog(
-  { name, running, onClose, onConfirm }: SessionDeleteDialogProps,
+  { count = 1, name, running, onClose, onConfirm }: SessionDeleteDialogProps,
 ) {
+  const plural = count > 1
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -54,7 +57,13 @@ export function SessionDeleteDialog(
       await onConfirm()
       onClose()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to delete the session.')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : plural
+          ? 'Unable to delete the sessions.'
+          : 'Unable to delete the session.',
+      )
       setDeleting(false)
     }
   }
@@ -76,10 +85,25 @@ export function SessionDeleteDialog(
         ref={dialogRef}
         role='alertdialog'
       >
-        <h2 id='session-delete-title'>Delete session?</h2>
+        <h2 id='session-delete-title'>
+          {plural ? `Delete ${count} sessions?` : 'Delete session?'}
+        </h2>
         <p className='session-delete-description' id='session-delete-description'>
-          <strong>{name}</strong> and its whole history will be permanently deleted from disk.
-          {running && ' The running session is closed first.'} This cannot be undone.
+          {plural
+            ? (
+              <>
+                <strong>{count} sessions</strong>{' '}
+                and their whole history will be permanently deleted from disk.
+              </>
+            )
+            : (
+              <>
+                <strong>{name}</strong> and its whole history will be permanently deleted from disk.
+              </>
+            )}
+          {running && (plural
+            ? ' Running sessions are closed first.'
+            : ' The running session is closed first.')} This cannot be undone.
         </p>
         {error && <p className='session-rename-error' role='alert'>{error}</p>}
         <div className='modal-actions'>

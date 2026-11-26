@@ -6,6 +6,7 @@
 
 - `commands/` defines commands, default shortcuts, normalization, and conflict detection.
 - `settings/` captures shortcut changes and resets them.
+- `settings/font-sizes.ts` defines and validates the text sizes (messages, thinking, code, input box); `settings/font-size-storage.ts` stores them under `pi-livecraft.font-sizes` and applies them as `--font-size-*` CSS variables. `App.tsx` owns the value.
 - `App.tsx` persists shortcuts, theme, conversation view, workspace restoration, left and right sidebar state.
 - `composer/` persists drafts per session.
 

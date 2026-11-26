@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, realpath, utimes, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, realpath, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import test from 'node:test'
-import { listRecentPiSessions, resolvePiSessionDirectory } from '../server/pi-session-store.ts'
+import {
+  deletePiSession,
+  listRecentPiSessions,
+  PiSessionWorkspaceError,
+  resolvePiSessionDirectory,
+} from '../server/pi-session-store.ts'
 
 async function fixture(): Promise<{ directory: string; workspace: string }> {
   return {
@@ -32,6 +37,64 @@ test('resolves Pi session storage with Pi environment precedence', () => {
     resolvePiSessionDirectory({}, homeDirectory),
     join(homeDirectory, '.pi', 'agent', 'sessions'),
   )
+})
+
+test('deletes a session file that belongs to the workspace', async () => {
+  const { directory, workspace } = await fixture()
+  const path = join(directory, 'done.jsonl')
+  await writeSession(path, workspace, 'done', 'Finished work')
+
+  await deletePiSession(path, await realpath(workspace), directory)
+  await assert.rejects(access(path))
+})
+
+test('deletes a header-only session that never recorded a message', async () => {
+  const { directory, workspace } = await fixture()
+  const path = join(directory, 'empty.jsonl')
+  await writeFile(
+    path,
+    `${
+      JSON.stringify({
+        type: 'session',
+        id: 'empty',
+        timestamp: '2026-07-19T09:00:00.000Z',
+        cwd: workspace,
+      })
+    }\n`,
+  )
+
+  await deletePiSession(path, await realpath(workspace), directory)
+  await assert.rejects(access(path))
+})
+
+test('treats a session Pi never wrote to disk as already deleted', async () => {
+  const { directory, workspace } = await fixture()
+  await deletePiSession(join(directory, 'never-written.jsonl'), workspace, directory)
+})
+
+test('refuses to delete a session recorded for another workspace', async () => {
+  const { directory, workspace } = await fixture()
+  const otherWorkspace = await mkdtemp(join(tmpdir(), 'pi-workspace-'))
+  const path = join(directory, 'other.jsonl')
+  await writeSession(path, otherWorkspace, 'other', 'Other work')
+
+  await assert.rejects(
+    deletePiSession(path, await realpath(workspace), directory),
+    PiSessionWorkspaceError,
+  )
+  await access(path)
+})
+
+test('refuses to delete a file outside the Pi session directory', async () => {
+  const { directory, workspace } = await fixture()
+  const outside = join(workspace, 'outside.jsonl')
+  await writeSession(outside, workspace, 'outside', 'Outside')
+
+  await assert.rejects(
+    deletePiSession(outside, await realpath(workspace), directory),
+    /must be stored in the Pi session directory/,
+  )
+  await access(outside)
 })
 
 test('sorts canonical Pi sessions by their last message timestamp', async () => {

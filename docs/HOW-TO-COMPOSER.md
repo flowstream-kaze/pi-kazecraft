@@ -11,20 +11,20 @@ composer/
 ├── Composer.tsx              # Form, textarea, images, send/stop, assembly
 ├── composer.css              # All composer styles
 ├── composer-images.ts        # Image paste, resize, compress
-├── composer-utils.ts         # capitalizeLabel, formatTokens, readComposerDraft
+├── composer-utils.ts         # capitalizeLabel, readComposerDraft
+├── builtin-commands.ts       # Pi's built-in terminal commands for the slash menu
+├── ContextChip.tsx           # Context usage chip (fills like a gauge)
 ├── prompt-title.ts           # Immediate session title
 ├── selects/
 │   ├── ComposerSelect.tsx    # Generic Radix Select wrapper + icon
 │   ├── AgentSelect.tsx       # Agent picker (props → RPC)
 │   ├── ModelSelect.tsx       # Model picker (snapshot → RPC)
-│   ├── PromptSelect.tsx      # Prompt template preview, insertion, and saving
 │   ├── ThinkingSelect.tsx    # Thinking level picker (snapshot → RPC)
 │   └── BehaviorSelect.tsx    # Steer / Follow-up (running only)
-└── status-bar/
-    ├── ComposerStatusBar.tsx # Layout container
-    ├── SessionInfo.tsx       # Name, cwd, active dot
-    └── SessionStats.tsx      # Cost, context usage + progress bar
 ```
+
+The session name and workspace folder are not part of the composer: they live in the
+[session top bar](/src/features/top-bar/README.md) above the conversation.
 
 ## 1. Understand the data flow
 
@@ -44,12 +44,11 @@ App.tsx  ──props──→  Composer.tsx  ──onSend / onCommand / onAbort�
 | Prop | Purpose |
 |---|---|
 | `snapshot` | Current Pi state (`state`, `models`, `stats`, `commands`) |
-| `commands` | Available slash commands from `snapshot.commands` |
+| `commands` | Pi's slash commands from `snapshot.commands`; the menu adds the built-ins from `builtin-commands.ts` |
 | `onCommand(command)` | Send any RPC command (`set_model`, `set_thinking_level`, …) |
+| `onBuiltinCommand(command)` | Run a built-in Pi terminal command typed in the chatbox |
 | `onSend(message, images, behavior)` | Send a prompt with optional images |
 | `onAbort()` | Stop generation |
-| `onImprovePrompt(prompt, direction)` | Rewrite the draft through an isolated prompt |
-| `onSavePrompt(scope, name, content)` | Persist a prompt template globally or for the project |
 | `onError(cause)` | Report an error to the notification stack |
 
 If the composer needs data or a callback that isn't already a prop, add it to the
@@ -148,8 +147,7 @@ export function MySelect({ value, onChange }: {
 | `value` | Currently selected value (controlled) |
 | `onValueChange` | Called with the new value |
 | `onOptionPointerMove` / `onOptionsPointerLeave` | (optional) Preview option content while browsing |
-| `loading` | (optional) Shows a spinner in the trigger |
-| `tone` | `'agent'`, `'model'`, `'thinking'`, `'behavior'`, `'command'`, `'prompt'`, or `'improve'` — sets the icon and color |
+| `tone` | `'agent'`, `'model'`, `'thinking'`, `'behavior'`, or `'command'` — sets the icon and color |
 | `disabled` | (optional) Greys out the select |
 | `open` / `onOpenChange` | (optional) For external open control (palette-triggered selects) |
 | `triggerRef` | (optional) For focusing the trigger from outside |
@@ -159,30 +157,9 @@ display.
 
 ## 4. Add a session stat
 
-Stats live in [`status-bar/SessionStats.tsx`](/src/features/composer/status-bar/SessionStats.tsx).
-Each stat is a `<span>` with a `<b>` label and inline content.
-
-**Add a stat to `SessionStats`:**
-
-```tsx
-// In SessionStats.tsx, after the existing <span> entries
-<span>
-  <b>My stat</b>
-  {myFormattedValue}
-</span>
-```
-
-**Derive the value in `Composer.tsx` and forward it:**
-
-Add a prop to `SessionStats`, derive the formatted value in `Composer.tsx` before the
-JSX, and pass it through `ComposerStatusBar`.
-
-```tsx
-const myValue = typeof snapshot.stats?.myField === 'number' ? snapshot.stats.myField : null
-const displayValue = myValue === null ? '—' : `${myValue} tokens`
-
-// Pass to ComposerStatusBar, which forwards to SessionStats
-```
+Session stats sit in the toolbar as chips, like `ContextChip.tsx`. Derive the value from
+`snapshot.stats`, give the chip the same 30px height and 7px radius as the selects, and expose the
+exact figure in a `Tooltip` and `aria-label`.
 
 ## 5. (Optional) Change the input or send behavior
 
@@ -200,8 +177,7 @@ rare and high-impact — trace every caller of the modified handler before editi
 
 | File | Action |
 |---|---|
-| `src/features/composer/Composer.tsx` | Add button, wire new select, or derive stat value |
+| `src/features/composer/Composer.tsx` | Add button or wire new select |
 | `src/features/composer/selects/<Select>.tsx` | (optional) New select component |
-| `src/features/composer/status-bar/SessionStats.tsx` | (optional) New stat entry |
 | `src/App.tsx` | (optional) New props or callbacks |
 | `src/api.ts` | (optional) If the callback needs a new backend route |

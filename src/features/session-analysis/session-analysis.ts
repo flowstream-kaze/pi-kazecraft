@@ -21,7 +21,6 @@ export type SessionAnalysisTarget = { kind: 'message' | 'turn'; index: number } 
 export interface AnalyzedTurn {
   messageIndex: number
   number: number
-  cost: number
   usage: MessageUsage
   toolCallCount: number
 }
@@ -41,7 +40,6 @@ export interface AnalyzedToolCall {
 export interface AnalyzedRequest {
   messageIndex: number
   title: string
-  cost: number
   usage: MessageUsage
   modelCallCount: number
   toolCalls: AnalyzedToolCall[]
@@ -65,13 +63,6 @@ export interface SessionAnalysis {
   turns: AnalyzedTurn[]
   toolCalls: AnalyzedToolCall[]
   tools: ToolSummary[]
-  totalCost: number
-  costAvailable: boolean
-  attributedCost: number
-  attributionAvailable: boolean
-  unattributedCost: number
-  averageTurnCost: number
-  medianTurnCost: number
   turnCount: number
   averageToolCallsPerTurn: number
   totalToolCalls: number
@@ -95,7 +86,6 @@ const emptyUsage = (): MessageUsage => ({
   cacheMiss: 0,
   cacheRead: 0,
   cacheWrite: 0,
-  cost: 0,
   output: 0,
 })
 
@@ -122,7 +112,6 @@ export function analyzeSession(
       currentRequest = {
         messageIndex,
         title: messageTitle(message),
-        cost: 0,
         usage: emptyUsage(),
         modelCallCount: 0,
         toolCalls: [],
@@ -189,24 +178,18 @@ export function analyzeSession(
     requests.push(activeRequest)
 
   requests.forEach((request, index) => {
-    request.cost = request.usage.cost
     request.failedToolCalls = request.toolCalls.filter((call) => call.isError).length
     request.complete = index < requests.length - 1 || !running
   })
 
   const toolCalls = requests.flatMap((request) => request.toolCalls)
-  const attributedCost = requests.reduce((total, request) => total + request.cost, 0)
-  const statsCost = finiteNumber(stats?.cost)
   const attributionAvailable = requests.some((request) => request.modelCallCount > 0)
-  const totalCost = statsCost ?? attributedCost
   const turns = [...turnUsageByMessage(messages)].map(([messageIndex, usage], index) => ({
     messageIndex,
     number: index + 1,
-    cost: usage.cost,
     usage,
     toolCallCount: toolCallsInMessage(messages[messageIndex] ?? {}).length,
   }))
-  const turnCosts = turns.map((turn) => turn.cost).sort((a, b) => a - b)
   const parsedUsage = requests.reduce(
     (total, request) => addUsage(total, request.usage),
     emptyUsage(),
@@ -220,19 +203,8 @@ export function analyzeSession(
     turns,
     toolCalls,
     tools: summarizeTools(toolCalls),
-    totalCost,
-    costAvailable: statsCost !== undefined || attributionAvailable,
-    attributedCost,
-    attributionAvailable,
-    unattributedCost: statsCost !== undefined && attributionAvailable
-      ? Math.max(0, totalCost - attributedCost)
-      : 0,
-    averageTurnCost: turnCosts.length
-      ? turnCosts.reduce((total, cost) => total + cost, 0) / turnCosts.length
-      : 0,
-    medianTurnCost: quantile(turnCosts, 0.5),
-    turnCount: turnCosts.length,
-    averageToolCallsPerTurn: turnCosts.length ? totalToolCalls / turnCosts.length : 0,
+    turnCount: turns.length,
+    averageToolCallsPerTurn: turns.length ? totalToolCalls / turns.length : 0,
     totalToolCalls,
     failedToolCalls: toolCalls.filter((call) => call.isError).length,
     contextPercent: finiteNumber(stats?.contextUsage?.percent),
@@ -245,7 +217,9 @@ export function analyzeSession(
 export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
   const percent = (value: number, total: number) =>
     total > 0 ? Math.round(value / total * 1_000) / 10 : null
-  const visibleTurnCost = analysis.turns.reduce((total, turn) => total + turn.cost, 0)
+  const turnTokens = (turn: AnalyzedTurn) =>
+    turn.usage.cacheMiss + turn.usage.cacheRead + turn.usage.cacheWrite + turn.usage.output
+  const visibleTurnTokens = analysis.turns.reduce((total, turn) => total + turnTokens(turn), 0)
   const turnNumbers = new Map(
     analysis.turns.map((turn) => [turn.messageIndex, turn.number] as const),
   )
@@ -261,8 +235,8 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
     const measuredCalls = calls.filter((call) => call.durationMs !== undefined)
     return {
       turn: turn.number,
-      cost: turn.cost,
-      costPercentOfVisibleTurns: percent(turn.cost, visibleTurnCost),
+      tokens: turnTokens(turn),
+      tokensPercentOfVisibleTurns: percent(turnTokens(turn), visibleTurnTokens),
       cacheMiss: turn.usage.cacheMiss,
       cacheRead: turn.usage.cacheRead,
       cacheWrite: turn.usage.cacheWrite,
@@ -289,8 +263,8 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
     failed: call.isError,
     pending: call.pending,
   })
-  const costliestTurns = [...analysis.turns]
-    .sort((a, b) => b.cost - a.cost)
+  const heaviestTurns = [...analysis.turns]
+    .sort((a, b) => turnTokens(b) - turnTokens(a))
     .slice(0, 5)
     .map(turnSnapshot)
   const largestToolOutputs = [...analysis.toolCalls]
@@ -308,9 +282,9 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
     .filter((call) => call.isError)
     .slice(0, 5)
     .map(toolCallSnapshot)
-  const topThreeTurnCost = costliestTurns
+  const topThreeTurnTokens = heaviestTurns
     .slice(0, 3)
-    .reduce((total, turn) => total + turn.cost, 0)
+    .reduce((total, turn) => total + turn.tokens, 0)
   const inputTokens = analysis.tokens.cacheMiss
     + analysis.tokens.cacheRead
     + analysis.tokens.cacheWrite
@@ -319,18 +293,15 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
     analysis.toolCalls.filter((call) => call.durationMs !== undefined).length
   const snapshot = {
     indicators: {
-      cost: {
-        totalSession: analysis.costAvailable ? analysis.totalCost : null,
-        visibleTurnsTotal: visibleTurnCost,
-        unmatchedToVisibleTurns: analysis.costAvailable
-          ? Math.max(0, analysis.totalCost - visibleTurnCost)
+      turns: {
+        count: analysis.turnCount,
+        visibleTurnTokens,
+        averageTokensPerTurn: analysis.turnCount > 0
+          ? Math.round(visibleTurnTokens / analysis.turnCount)
           : null,
-        turns: analysis.turnCount,
-        averagePerTurn: analysis.turnCount > 0 ? analysis.averageTurnCost : null,
-        medianPerTurn: analysis.turnCount > 0 ? analysis.medianTurnCost : null,
-        maximumPerTurn: costliestTurns[0]?.cost ?? null,
-        topTurnPercentOfVisibleTurnCost: percent(costliestTurns[0]?.cost ?? 0, visibleTurnCost),
-        topThreeTurnsPercentOfVisibleTurnCost: percent(topThreeTurnCost, visibleTurnCost),
+        maximumTokensPerTurn: heaviestTurns[0]?.tokens ?? null,
+        topTurnPercentOfVisibleTokens: percent(heaviestTurns[0]?.tokens ?? 0, visibleTurnTokens),
+        topThreeTurnsPercentOfVisibleTokens: percent(topThreeTurnTokens, visibleTurnTokens),
       },
       cacheAndContext: {
         contextUsedPercent: analysis.contextPercent ?? null,
@@ -362,14 +333,13 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
       },
     },
     evidence: {
-      costliestTurns,
+      heaviestTurns,
       mostUsedTools: analysis.tools.slice(0, 6),
       largestToolOutputs,
       slowestToolCalls,
       failedToolCalls,
     },
     dataQuality: {
-      sessionCostAvailable: analysis.costAvailable,
       tokensAvailable: analysis.tokensAvailable,
       toolDetailsPartial: observedToolCalls < analysis.totalToolCalls,
       toolsWithoutTurn: analysis
@@ -381,17 +351,17 @@ export function buildSessionAnalysisPrompt(analysis: SessionAnalysis): string {
     },
   }
   return [
-    'Analyse uniquement le snapshot JSON ci-dessous. Concentre-toi sur les turns et les tools, sans paraphraser tous les KPI.',
-    'Réponds en français, en 120 mots maximum, avec exactement cette structure Markdown :',
-    '**Bilan** — une phrase qui qualifie la session sans jugement vague.',
-    '- **Turns clés** — cite un à trois turns par numéro, classés d’abord par coût ; donne leur coût et leur part du coût visible, puis les métriques qui les distinguent.',
-    '- **Outils** — relève les tools fréquents, en échec, volumineux ou lents et rattache-les à leur turn lorsqu’il est connu.',
-    '- **Cache & contexte** — explique seulement le signal global ou propre aux turns clés.',
-    '**Priorité** — une seule action concrète fondée sur le signal le plus important, ou « Aucune action prioritaire ».',
-    'Un turn est clé ici par son coût absolu et sa part du coût des turns visibles. Les tools associés servent à le caractériser, jamais à leur attribuer ce coût.',
-    'Appuie chaque constat sur une ou deux valeurs. Si un axe est sain, dis-le ; si les données manquent ou sont partielles, nuance-le brièvement.',
-    'cacheReadPercentOfInput mesure la part des tokens d’entrée relus depuis le cache : une valeur élevée est généralement positive. Les longueurs des tools sont des caractères, pas des tokens ni un coût monétaire. Les durées ne valent que pour les appels mesurés.',
-    'N’attribue aucune cause non observée et ne déduis jamais le contenu de la conversation ou des tools.',
+    'Analyze only the JSON snapshot below. Focus on turns and tools without restating every metric.',
+    'Answer in English, in 120 words at most, with exactly this Markdown structure:',
+    '**Summary** — one sentence that characterizes the session without vague judgment.',
+    '- **Key turns** — cite one to three turns by number, ranked by tokens; give their tokens and their share of the visible turn tokens, then the metrics that set them apart.',
+    '- **Tools** — point out frequent, failed, large, or slow tools and tie them to their turn when it is known.',
+    '- **Cache & context** — explain only the overall signal or the one specific to the key turns.',
+    '**Priority** — one concrete action based on the strongest signal, or "No priority action".',
+    'A turn is key here by its token count and its share of the visible turn tokens. Its tools characterize it; never attribute its tokens to them.',
+    'Support each finding with one or two values. If an area is healthy, say so; if data is missing or partial, qualify it briefly.',
+    'cacheReadPercentOfInput is the share of input tokens read back from the cache: a high value is generally good. Tool lengths are characters, not tokens. Durations apply only to measured calls.',
+    'Do not attribute unobserved causes and never infer the content of the conversation or the tools.',
     '<session_analysis_json>',
     JSON.stringify(snapshot),
     '</session_analysis_json>',
@@ -403,7 +373,6 @@ function createActiveRequest(): MutableRequest {
   return {
     messageIndex: -1,
     title: 'Request in progress',
-    cost: 0,
     usage: emptyUsage(),
     modelCallCount: 0,
     toolCalls: [],
@@ -417,7 +386,6 @@ function addUsage(target: MessageUsage, usage: MessageUsage): MessageUsage {
   target.cacheMiss += usage.cacheMiss
   target.cacheRead += usage.cacheRead
   target.cacheWrite += usage.cacheWrite
-  target.cost += usage.cost
   target.output += usage.output
   return target
 }
@@ -434,7 +402,7 @@ function statsUsage(stats: SessionStats | null): MessageUsage | null {
     cacheMiss === undefined || cacheRead === undefined || cacheWrite === undefined
     || output === undefined
   ) return null
-  return { cacheMiss, cacheRead, cacheWrite, cost: finiteNumber(stats?.cost) ?? 0, output }
+  return { cacheMiss, cacheRead, cacheWrite, output }
 }
 
 /** Aggregates tool call metrics by tool name, sorted by call count. */
@@ -478,11 +446,6 @@ function messageTitle(message: JsonObject): string {
     : ''
   const normalized = text.replace(/\s+/g, ' ').trim()
   return normalized.length > 90 ? `${normalized.slice(0, 89)}…` : normalized || 'Untitled request'
-}
-
-function quantile(sortedValues: number[], proportion: number): number {
-  if (sortedValues.length === 0) return 0
-  return sortedValues[Math.max(0, Math.ceil(sortedValues.length * proportion) - 1)] ?? 0
 }
 
 function finiteNumber(value: unknown): number | undefined {

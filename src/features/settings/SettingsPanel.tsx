@@ -1,7 +1,18 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import * as Select from '@radix-ui/react-select'
+import { BANNER_ACCEPT, prepareBannerImage } from '../workspace/sidebar-banner.ts'
+import { SidebarBanner } from '../workspace/SidebarBanner.tsx'
 import type { CommandDefinition, CommandId } from '../commands/command-registry.ts'
 import { shortcutFromEvent, shortcutConflicts } from '../commands/command-registry.ts'
+import {
+  DEFAULT_FONT_SIZES,
+  FONT_SIZE_KEYS,
+  FONT_SIZE_LABELS,
+  type FontSizeKey,
+  type FontSizes,
+  MAX_FONT_SIZE,
+  MIN_FONT_SIZE,
+} from './font-sizes.ts'
 import {
   applyThemePalette,
   contrastColor,
@@ -16,6 +27,7 @@ const themeVariableLabels: Record<ThemeVariable, string> = {
   surface: 'Surface',
   ink: 'Text',
   accent: 'Primary accent',
+  'sidebar-accent': 'Sidebar accent',
   secondary: 'Secondary accent',
   success: 'Success',
   warning: 'Warning',
@@ -25,7 +37,7 @@ const themeVariableLabels: Record<ThemeVariable, string> = {
 // ── Tab registry ───────────────────────────────────────────────────
 
 /** Identifies a settings tab. Extend this union when adding a new tab. */
-export type SettingsTabId = 'themes' | 'terminal' | 'shortcuts'
+export type SettingsTabId = 'themes' | 'text' | 'sidebar' | 'terminal' | 'shortcuts'
 
 /** Describes one tab in the settings modal. */
 export interface SettingsTabDefinition {
@@ -34,8 +46,10 @@ export interface SettingsTabDefinition {
 }
 
 /** Ordered list of tabs rendered in the settings modal. */
-export const settingsTabs: SettingsTabDefinition[] = [
+const settingsTabs: SettingsTabDefinition[] = [
   { id: 'themes', label: 'Color themes' },
+  { id: 'text', label: 'Text size' },
+  { id: 'sidebar', label: 'Sidebar' },
   { id: 'terminal', label: 'Terminal' },
   { id: 'shortcuts', label: 'Shortcuts' },
 ]
@@ -43,12 +57,20 @@ export const settingsTabs: SettingsTabDefinition[] = [
 // ── Shared props ───────────────────────────────────────────────────
 
 interface SettingsPanelProps {
+  /** The tab shown when the panel opens; `/hotkeys` opens on the shortcuts. */
+  initialTab?: SettingsTabId
   definitions: CommandDefinition[]
   shortcuts: Partial<Record<CommandId, string>>
   terminalCommand: string
+  fontSizes: FontSizes
+  /** The sidebar banner image (a data URL), or null for the built-in banner. */
+  bannerImage: string | null
   themes: Theme[]
   activeThemeId: string
   onChange: (id: CommandId, shortcut: string) => void
+  onFontSizesChange: (sizes: FontSizes) => void
+  /** Stores a banner image, or restores the built-in banner for null; throws when it cannot save. */
+  onBannerChange: (image: string | null) => void
   onTerminalCommandChange: (value: string) => void
   onSelectTheme: (id: string) => void
   onDuplicateTheme: () => void
@@ -258,6 +280,106 @@ function TerminalSettings({ terminalCommand, onTerminalCommandChange }: Terminal
   )
 }
 
+interface TextSizeSettingsProps {
+  fontSizes: FontSizes
+  onFontSizesChange: (sizes: FontSizes) => void
+}
+
+interface SidebarSettingsProps {
+  bannerImage: string | null
+  onBannerChange: (image: string | null) => void
+}
+
+function SidebarSettings({ bannerImage, onBannerChange }: SidebarSettingsProps) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function applyFile(file: File | undefined): Promise<void> {
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      onBannerChange(await prepareBannerImage(file))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'This image could not be used.')
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <section className='sidebar-settings'>
+      <h3>Banner</h3>
+      <p>
+        The image at the top of the session sidebar. Wide images work best; it is shown about 44
+        pixels tall and scaled to fit. The image is saved in this browser.
+      </p>
+      <div className='sidebar-settings-preview'>
+        <SidebarBanner image={bannerImage} />
+      </div>
+      <div className='sidebar-settings-actions'>
+        <input
+          accept={BANNER_ACCEPT}
+          aria-label='Banner image file'
+          hidden
+          onChange={(event) => void applyFile(event.target.files?.[0])}
+          ref={fileRef}
+          type='file'
+        />
+        <button disabled={busy} onClick={() => fileRef.current?.click()} type='button'>
+          {busy ? 'Preparing…' : 'Choose image…'}
+        </button>
+        <button
+          disabled={busy || bannerImage === null}
+          onClick={() => {
+            setError('')
+            onBannerChange(null)
+          }}
+          type='button'
+        >
+          Restore default banner
+        </button>
+      </div>
+      {error && <p className='sidebar-settings-error' role='alert'>{error}</p>}
+    </section>
+  )
+}
+
+function TextSizeSettings({ fontSizes, onFontSizesChange }: TextSizeSettingsProps) {
+  const setSize = (key: FontSizeKey, size: number) =>
+    onFontSizesChange({ ...fontSizes, [key]: size })
+  const isDefault = FONT_SIZE_KEYS.every((key) => fontSizes[key] === DEFAULT_FONT_SIZES[key])
+  return (
+    <section className='text-size-settings'>
+      <p>Changes apply right away and are saved in this browser.</p>
+      {FONT_SIZE_KEYS.map((key) => (
+        <label className='text-size-row' key={key}>
+          <span>{FONT_SIZE_LABELS[key]}</span>
+          <input
+            aria-label={`${FONT_SIZE_LABELS[key]} text size`}
+            max={MAX_FONT_SIZE}
+            min={MIN_FONT_SIZE}
+            onChange={(event) => setSize(key, Number(event.target.value))}
+            step={1}
+            type='range'
+            value={fontSizes[key]}
+          />
+          <output>{fontSizes[key]}px</output>
+        </label>
+      ))}
+      <button
+        disabled={isDefault}
+        onClick={() => onFontSizesChange({ ...DEFAULT_FONT_SIZES })}
+        type='button'
+      >
+        Restore default sizes
+      </button>
+    </section>
+  )
+}
+
 interface ShortcutsSettingsProps {
   definitions: CommandDefinition[]
   shortcuts: Partial<Record<CommandId, string>>
@@ -321,12 +443,17 @@ function ShortcutsSettings(
 
 /** Configures local shortcuts, terminal behavior, and editable color themes. */
 export function SettingsPanel({
+  initialTab = 'themes',
   definitions,
   shortcuts,
   terminalCommand,
+  fontSizes,
+  bannerImage,
   themes,
   activeThemeId,
   onChange,
+  onFontSizesChange,
+  onBannerChange,
   onTerminalCommandChange,
   onSelectTheme,
   onDuplicateTheme,
@@ -337,7 +464,7 @@ export function SettingsPanel({
   onReset,
   onClose,
 }: SettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('themes')
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab)
   const [capturing, setCapturing] = useState<CommandId | null>(null)
   const [themeName, setThemeName] = useState('')
   const conflicts = shortcutConflicts(shortcuts)
@@ -399,6 +526,16 @@ export function SettingsPanel({
                 themeName={themeName}
                 themes={themes}
               />
+            </TabPanel>
+          )}
+          {activeTab === 'text' && (
+            <TabPanel key='text' id='settings-tab-text' labelledBy='settings-tab-btn-text'>
+              <TextSizeSettings fontSizes={fontSizes} onFontSizesChange={onFontSizesChange} />
+            </TabPanel>
+          )}
+          {activeTab === 'sidebar' && (
+            <TabPanel key='sidebar' id='settings-tab-sidebar' labelledBy='settings-tab-btn-sidebar'>
+              <SidebarSettings bannerImage={bannerImage} onBannerChange={onBannerChange} />
             </TabPanel>
           )}
           {activeTab === 'terminal' && (

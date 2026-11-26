@@ -23,12 +23,12 @@ src/api.ts: runPrompt(sessionId, options)
 server/backend.ts   (validates prompt, forwards options)
     │  manager.request({ action: 'run_prompt', ... })
     ▼
-server/manager.ts   (resolves cwd from session, delegates)
+server/manager.ts   (resolves cwd and current model from the session, delegates)
     │
     ▼
 server/run-isolated-prompt.ts
     │  PiProcess(isolated: true, PI_CODING_AGENT_DIR=<home>/.pi/livecraft-isolated, ...)
-    │  → set_model (or auto-select cheapest)
+    │  → set_model (the session's model, else the first one Pi lists)
     │  → prompt
     │  → wait agent_settled
     │  → get_messages → extract assistant text
@@ -52,7 +52,7 @@ const text: string = await runPrompt(sessionId, options)
 | `prompt` | `string` | **required** | The prompt sent to the model |
 | `systemPrompt` | `string` | `undefined` | System prompt for the disposable session |
 | `thinkingLevel` | `string` | `'off'` | `'off'`, `'low'`, `'medium'`, or `'high'` |
-| `model` | `{ provider, modelId }` | auto (cheapest) | Model to use; omit for cheapest available |
+| `model` | `{ provider, modelId }` | session model | Model to use; omit to run on the session's current model, so a local model server does not switch models |
 | `extensions` | `string[]` | `undefined` | Extension paths to load; omit to disable all |
 | `tools` | `string[]` | `undefined` | Tool names to load; omit to disable all |
 | `includeContextFiles` | `boolean` | `true` | Whether Pi loads `AGENTS.md`/`CLAUDE.md` from parent directories. Set `false` to disable automatic context and provide your own via `systemPrompt`. |

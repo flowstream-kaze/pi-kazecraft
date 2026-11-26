@@ -227,15 +227,18 @@ function isMissingExecutable(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
-/** The path reaches PowerShell only through the environment, never through the script text. */
-const windowsPickerScript = [
+/**
+ * The path reaches PowerShell only through the environment, never through the script text.
+ * Statements are joined with `; `, so an `else` must stay on its `if` statement: PowerShell
+ * rejects an `else` that follows a semicolon.
+ */
+export const windowsPickerScript = [
   '$ErrorActionPreference = "Stop"',
   'Add-Type -AssemblyName System.Windows.Forms',
   '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
   `$dialog.Description = "${pickerTitle}"`,
   '$initial = $env:PI_LIVECRAFT_PICK_INITIAL',
   'if ($initial -and (Test-Path -LiteralPath $initial -PathType Container)) { $dialog.SelectedPath = $initial }',
-  'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }',
-  'else { exit 1 }',
+  'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) } else { exit 1 }',
 ]
   .join('; ')

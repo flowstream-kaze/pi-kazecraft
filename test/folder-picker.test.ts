@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import test from 'node:test'
 import {
@@ -6,6 +7,7 @@ import {
   FolderPickerUnavailableError,
   getFolderPickerPlatform,
   pickDirectory,
+  windowsPickerScript,
 } from '../server/features/folder-picker/folder-picker.ts'
 
 interface FakeRun {
@@ -100,6 +102,34 @@ test('passes the Windows starting directory only through the environment', () =>
   assert.ok(!invocation.args.join(' ').includes('hostile'))
   assert.equal(invocation.env?.PI_LIVECRAFT_PICK_INITIAL, 'C:\\hostile & ü')
 })
+
+test('keeps every else on its if statement in the Windows dialog script', () => {
+  // Statements are joined with "; ", and PowerShell rejects an else after a semicolon.
+  assert.doesNotMatch(windowsPickerScript, /;\s*else\b/)
+})
+
+test(
+  'writes a Windows dialog script that PowerShell parses without errors',
+  { skip: process.platform !== 'win32' && 'PowerShell parser is only checked on Windows' },
+  () => {
+    // A detached `else` parses as a command named "else" and only fails at run time,
+    // so the check reports such commands alongside real parse errors.
+    const problems = execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      '$errors = $null; '
+      + '$ast = [System.Management.Automation.Language.Parser]::ParseInput('
+      + '$env:PICKER_SCRIPT, [ref]$null, [ref]$errors); '
+      + '$errors | ForEach-Object { $_.Message }; '
+      + '$ast.FindAll({ param($node) '
+      + '$node -is [System.Management.Automation.Language.CommandAst] '
+      + '-and $node.GetCommandName() -in @(\'else\', \'elseif\') }, $true) '
+      + '| ForEach-Object { \'detached keyword: \' + $_.Extent.Text }',
+    ], { encoding: 'utf8', env: { ...process.env, PICKER_SCRIPT: windowsPickerScript } })
+    assert.equal(problems.trim(), '')
+  },
+)
 
 test('uses the Windows dialog first in WSL and converts its selected path back', async () => {
   const runs: FakeRun[] = []

@@ -39,20 +39,67 @@
     opacity: 0.35;
   }
 }
+/* Replies fill the message column, so their text lines up with the composer below. */
 .message.assistant {
   position: relative;
-  max-width: 760px;
   padding: 0 2px;
 }
-.message.assistant > .content {
+/* Room for the hover copy button, shown only on a reply that has no response bar yet. */
+.message.assistant:has(> .message-actions) > .content {
   padding-right: 42px;
 }
 .custom-message {
-  max-width: 760px;
   padding: 11px 13px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--surface-raised);
+}
+.compaction-message {
+  padding: 0;
+}
+.compaction-message > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.compaction-message > summary::-webkit-details-marker {
+  display: none;
+}
+.compaction-message > summary:hover {
+  color: var(--ink);
+}
+.compaction-message > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.compaction-chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+.compaction-message[open] .compaction-chevron {
+  transform: rotate(45deg);
+}
+.compaction-hint {
+  margin-left: auto;
+  font-size: 12px;
+}
+.compaction-message[open] .compaction-hint {
+  visibility: hidden;
+}
+.compaction-message > .content {
+  padding: 4px 13px 11px;
+  border-top: 1px solid var(--line);
 }
 .custom-message-type {
   display: block;
@@ -63,18 +110,31 @@
 }
 .turn-usage {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px 12px;
+  align-items: center;
+  gap: 12px;
   margin: 11px 0 13px;
-  padding-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   color: var(--muted);
   font: 10px ui-monospace, monospace;
   animation: turn-usage-fade-in 300ms ease-out both;
 }
-.turn-usage div {
+.turn-usage dl {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  min-width: 0;
+  margin: 0;
+}
+.turn-usage dl > div {
   display: inline-flex;
   gap: 4px;
+}
+/* The reply's copy action stays visible at the end of its bar, unlike hover-only actions. */
+.turn-usage > span:last-child,
+.turn-usage > .conversation-action-button {
+  flex: 0 0 auto;
 }
 .turn-usage dt {
   color: var(--subtle);
@@ -100,7 +160,11 @@
 }
 .content {
   overflow-wrap: anywhere;
-  font: 14px/1.7 ui-sans-serif, system-ui, sans-serif;
+  font:
+    var(--font-size-message, 16px)/1.5 "Segoe UI",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
 }
 .content > :first-child, .reasoning > :first-child {
   margin-top: 0;
@@ -114,7 +178,7 @@
 .reasoning {
   margin: 0 0 13px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-reasoning, 12px);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -124,7 +188,9 @@
   border: 1px solid var(--line);
   border-radius: 7px;
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  font: 11px/1.55 ui-monospace, monospace;
+  font:
+    calc(var(--font-size-code, 12px) - 1px)/1.55 ui-monospace,
+    monospace;
   white-space: pre-wrap;
 }
 .reasoning :not(pre) > code {
@@ -153,7 +219,7 @@
   border-bottom: 1px solid var(--line);
 }
 .message.assistant .content strong {
-  color: color-mix(in srgb, var(--accent) 82%, transparent);
+  color: var(--ink);
 }
 .message.assistant .content ul ::marker,
 .message.assistant .content ol ::marker {
@@ -178,7 +244,9 @@
   border: 1px solid var(--line);
   border-radius: 9px;
   background: color-mix(in srgb, var(--canvas) 60%, var(--surface));
-  font: 12px/1.6 ui-monospace, monospace;
+  font:
+    var(--font-size-code, 12px)/1.6 ui-monospace,
+    monospace;
   white-space: pre-wrap;
 }
 .content :not(pre) > code {
@@ -186,7 +254,9 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
   color: var(--ink);
-  font: 12px ui-monospace, monospace;
+  font:
+    var(--font-size-code, 12px) ui-monospace,
+    monospace;
 }
 .content a {
   color: var(--accent);

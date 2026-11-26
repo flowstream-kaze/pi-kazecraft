@@ -178,7 +178,6 @@ export interface ManagerEvent {
 export type ManagerMessage = ManagerResponse | ManagerEvent
 
 export interface SessionStats {
-  cost?: number
   userMessages?: number
   assistantMessages?: number
   toolCalls?: number
@@ -198,12 +197,6 @@ export interface SessionStats {
   }
 }
 
-export interface PromptTemplate {
-  name: string
-  content: string
-  description?: string
-}
-
 export interface ConversationMessage extends JsonObject {
   forkEntryId?: string
 }
@@ -213,7 +206,6 @@ export interface SessionSnapshot {
   messages: ConversationMessage[]
   models: JsonObject[]
   commands: JsonObject[]
-  promptTemplates: PromptTemplate[]
   stats: SessionStats | null
   liveEvents: Array<{ data: JsonObject; sequence: number }>
 }

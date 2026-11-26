@@ -1,16 +1,29 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { PanelIcon } from '../../components/PanelIcon.tsx'
 import { Tooltip } from '../../components/Tooltip.tsx'
 import type { RecentSession, SessionSummary } from '../../../shared/types.ts'
+import { AddFolderDialog } from './AddFolderDialog.tsx'
+import { SidebarBanner } from './SidebarBanner.tsx'
 import { sessionIndicator } from './session-indicator.ts'
 import { SessionStatusIndicator } from './SessionStatusIndicator.tsx'
+import {
+  parseSidebarGroupBy,
+  projectNamesByPath,
+  SIDEBAR_GROUP_BY_KEY,
+  SIDEBAR_GROUP_BY_OPTIONS,
+  sidebarSections,
+  type SidebarGroupBy,
+  type SidebarSection,
+} from './sidebar-grouping.ts'
 import type { SessionActionTarget } from './sidebar-sessions.ts'
 import { SessionDeleteDialog } from './SessionDeleteDialog.tsx'
 import { SessionRenameDialog } from './SessionRenameDialog.tsx'
@@ -21,10 +34,11 @@ import {
   visibleWorkspaceSessionCount,
 } from './workspace-sidebar.ts'
 
-/** What a right-click opened: a session row, or a workspace section header. */
+/** What a right-click opened: a session row, a project section header, or the sidebar itself. */
 type ContextMenuSubject =
   | { kind: 'session'; target: SessionActionTarget; archived: boolean }
   | { kind: 'workspace'; group: WorkspaceGroup }
+  | { kind: 'sidebar' }
 
 interface ContextMenuState {
   subject: ContextMenuSubject
@@ -37,6 +51,8 @@ type RenameTarget =
   | { kind: 'workspace'; path: string; name: string }
 
 interface WorkspaceSidebarProps {
+  /** The user's banner image (a data URL), or null for the built-in banner. */
+  bannerImage: string | null
   collapsed: boolean
   collapsedWorkspacePaths: ReadonlySet<string>
   compactingSessionIds: ReadonlySet<string>
@@ -46,16 +62,25 @@ interface WorkspaceSidebarProps {
   selectedId: string
   sessions: SessionSummary[]
   width: number
+  /** Adds an existing folder as a project section without starting a session. */
+  onAddWorkspace: (path: string) => void
   onArchiveSession: (target: SessionActionTarget) => Promise<void>
+  onChangeBanner: () => void
   onCloseSession: (sessionId: string) => Promise<void>
   onCreateInWorkspace: (path: string) => Promise<void>
   onDeleteSession: (target: SessionActionTarget) => Promise<void>
+  onNewProject: () => void
   onNewSession: () => void
   onOpenSession: (row: RecentSession) => Promise<void>
   onOpenSettings: () => void
+  /** Runs /reload for the selected session; a rejection is reported through `onError`. */
+  onReload: () => Promise<void>
+  /** Why Reload is unavailable right now (no session, Pi busy), or undefined when it can run. */
+  reloadUnavailable?: string
   onRenameSession: (target: SessionActionTarget, name: string) => Promise<void>
   /** Stores a sidebar-only name; an empty name restores the folder name. */
   onRenameWorkspace: (path: string, name: string) => void
+  onSetWorkspacesCollapsed: (paths: readonly string[], collapsed: boolean) => void
   onUnarchiveSession: (sessionPath: string) => void
   onToggleWorkspaceCollapsed: (path: string) => void
   onResize: (width: number) => void
@@ -63,8 +88,9 @@ interface WorkspaceSidebarProps {
   onError: (cause: unknown) => void
 }
 
-/** Displays one collapsible section per workspace and its recent Pi sessions. */
+/** Displays the sessions grouped by project folder, date, or as one list. */
 export function WorkspaceSidebar({
+  bannerImage,
   collapsed,
   collapsedWorkspacePaths,
   compactingSessionIds,
@@ -74,15 +100,21 @@ export function WorkspaceSidebar({
   selectedId,
   sessions,
   width,
+  onAddWorkspace,
   onArchiveSession,
+  onChangeBanner,
   onCloseSession,
   onCreateInWorkspace,
   onDeleteSession,
+  onNewProject,
   onNewSession,
   onOpenSession,
   onOpenSettings,
+  onReload,
+  reloadUnavailable,
   onRenameSession,
   onRenameWorkspace,
+  onSetWorkspacesCollapsed,
   onUnarchiveSession,
   onToggleWorkspaceCollapsed,
   onResize,
@@ -93,40 +125,61 @@ export function WorkspaceSidebar({
   const [creatingInPath, setCreatingInPath] = useState('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState({ left: 0, top: 0 })
+  const [groupByMenuOpen, setGroupByMenuOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SessionActionTarget | null>(null)
+  const [addFolderOpen, setAddFolderOpen] = useState(false)
+  const [groupBy, setGroupBy] = useState<SidebarGroupBy>(readGroupBy)
+  // Date and flat sections are not folders, so their collapse state stays in this view.
+  const [collapsedSectionKeys, setCollapsedSectionKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [expandedWorkspacePaths, setExpandedWorkspacePaths] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const [archiveOpenPaths, setArchiveOpenPaths] = useState<ReadonlySet<string>>(() => new Set())
+  const [selecting, setSelecting] = useState(false)
+  const [selectedPaths, setSelectedPaths] = useState<ReadonlySet<string>>(() => new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [reloading, setReloading] = useState(false)
   const revealedSelectionIdRef = useRef('')
   const selectedSessionRef = useRef<HTMLButtonElement>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  const contextMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const contextMenuTriggerRef = useRef<HTMLElement>(null)
+
+  const sections = useMemo(() => sidebarSections(groups, groupBy), [groups, groupBy])
+  const projectNames = useMemo(() => projectNamesByPath(groups), [groups])
+
+  function isSectionCollapsed(section: SidebarSection): boolean {
+    return section.project
+      ? collapsedWorkspacePaths.has(section.key)
+      : collapsedSectionKeys.has(section.key)
+  }
 
   useEffect(() => {
     selectedSessionRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [groups, selectedId, expandedWorkspacePaths])
+  }, [sections, selectedId, expandedWorkspacePaths])
 
   // A selection made outside the list, such as a shortcut or the restored session, must stay
   // reachable, so the section holding it reveals its full history once.
   useEffect(() => {
     if (!selectedId || selectedId === revealedSelectionIdRef.current) return
     const sessionPath = sessions.find((session) => session.id === selectedId)?.sessionPath
-    const group = sessionPath
-      ? groups.find((candidate) =>
+    const section = sessionPath
+      ? sections.find((candidate) =>
         candidate.sessions.some((row) => row.sessionPath === sessionPath)
       )
       : undefined
     // History may still be loading; the next render resolves the section.
-    if (!group) return
+    if (!section) return
     revealedSelectionIdRef.current = selectedId
-    const index = group.sessions.findIndex((row) => row.sessionPath === sessionPath)
+    const index = section.sessions.findIndex((row) => row.sessionPath === sessionPath)
     if (index < visibleWorkspaceSessionCount) return
     setExpandedWorkspacePaths((current) =>
-      current.has(group.path) ? current : new Set(current).add(group.path)
+      current.has(section.key) ? current : new Set(current).add(section.key)
     )
-  }, [groups, selectedId, sessions])
+  }, [sections, selectedId, sessions])
 
   useLayoutEffect(() => {
     if (!contextMenu || !contextMenuRef.current) return
@@ -163,28 +216,64 @@ export function WorkspaceSidebar({
     }
   }, [contextMenu])
 
+  // Escape leaves selection mode when no menu or dialog is open above it.
+  useEffect(() => {
+    if (!selecting) return
+    const exitOnEscape = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented || contextMenu || bulkDeleteOpen) return
+      endSelection()
+    }
+    document.addEventListener('keydown', exitOnEscape)
+    return () => document.removeEventListener('keydown', exitOnEscape)
+  }, [bulkDeleteOpen, contextMenu, selecting])
+
+  // Rows that disappear (deleted, archived elsewhere) leave the selection.
+  useEffect(() => {
+    if (selectedPaths.size === 0) return
+    const visible = new Set(
+      sections.flatMap((section) => section.sessions.map((row) => row.sessionPath)),
+    )
+    if ([...selectedPaths].every((path) => visible.has(path))) return
+    setSelectedPaths(new Set([...selectedPaths].filter((path) => visible.has(path))))
+  }, [sections, selectedPaths])
+
   function dismissContextMenu(): void {
     setContextMenu(null)
+    setGroupByMenuOpen(false)
     contextMenuTriggerRef.current?.focus()
   }
 
   function openContextMenu(
     subject: ContextMenuSubject,
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
   ): void {
     event.preventDefault()
     contextMenuTriggerRef.current = event.currentTarget
+    setGroupByMenuOpen(false)
     setContextMenu({ subject, x: event.clientX, y: event.clientY })
+  }
+
+  /** Right-click anywhere else in the sidebar opens the sidebar menu. */
+  function openSidebarContextMenu(event: ReactMouseEvent<HTMLElement>): void {
+    // A row or section header already opened its own menu.
+    if (event.nativeEvent.defaultPrevented) return
+    const target = event.target instanceof Element ? event.target : null
+    // Dialogs and text fields keep the browser's own menu.
+    if (target?.closest('.modal-backdrop, input, textarea, .session-context-menu')) return
+    openContextMenu({ kind: 'sidebar' }, event)
   }
 
   function openContextMenuFromKeyboard(
     subject: ContextMenuSubject,
-    event: ReactKeyboardEvent<HTMLButtonElement>,
+    event: ReactKeyboardEvent<HTMLElement>,
   ): void {
     if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
     event.preventDefault()
+    // A row or header handled it; the sidebar's own handler must not replace that menu.
+    event.stopPropagation()
     contextMenuTriggerRef.current = event.currentTarget
     const rect = event.currentTarget.getBoundingClientRect()
+    setGroupByMenuOpen(false)
     setContextMenu({ subject, x: rect.left, y: rect.bottom })
   }
 
@@ -197,6 +286,7 @@ export function WorkspaceSidebar({
   function startRename(): void {
     if (!contextMenu) return
     const { subject } = contextMenu
+    if (subject.kind === 'sidebar') return
     dismissContextMenu()
     setRenameTarget(
       subject.kind === 'session'
@@ -235,6 +325,17 @@ export function WorkspaceSidebar({
     )
   }
 
+  async function reload(): Promise<void> {
+    setReloading(true)
+    try {
+      await onReload()
+    } catch (cause) {
+      onError(cause)
+    } finally {
+      setReloading(false)
+    }
+  }
+
   async function createInWorkspace(path: string): Promise<void> {
     setCreatingInPath(path)
     try {
@@ -246,25 +347,119 @@ export function WorkspaceSidebar({
     }
   }
 
-  function toggleWorkspace(path: string): void {
-    // Collapsing a section drops its extra rows, so reopening it starts from the default step.
-    if (!collapsedWorkspacePaths.has(path)) {
-      setExpandedWorkspacePaths((current) => {
-        if (!current.has(path)) return current
-        const next = new Set(current)
-        next.delete(path)
-        return next
-      })
-    }
-    onToggleWorkspaceCollapsed(path)
-  }
-
-  function toggleWorkspaceExpanded(path: string): void {
+  /** Collapsing a section drops its extra rows, so reopening it starts from the default step. */
+  function forgetExpanded(keys: readonly string[]): void {
     setExpandedWorkspacePaths((current) => {
+      if (!keys.some((key) => current.has(key))) return current
       const next = new Set(current)
-      if (!next.delete(path)) next.add(path)
+      for (const key of keys) next.delete(key)
       return next
     })
+  }
+
+  function toggleSection(section: SidebarSection): void {
+    const sectionCollapsed = isSectionCollapsed(section)
+    if (!sectionCollapsed) forgetExpanded([section.key])
+    if (section.project) {
+      onToggleWorkspaceCollapsed(section.key)
+      return
+    }
+    setCollapsedSectionKeys((current) => {
+      const next = new Set(current)
+      if (!next.delete(section.key)) next.add(section.key)
+      return next
+    })
+  }
+
+  function setAllSectionsCollapsed(collapse: boolean): void {
+    const projectKeys = sections.filter((section) => section.project).map((section) => section.key)
+    const otherKeys = sections.filter((section) => !section.project).map((section) => section.key)
+    if (collapse) forgetExpanded(sections.map((section) => section.key))
+    onSetWorkspacesCollapsed(projectKeys, collapse)
+    setCollapsedSectionKeys((current) => {
+      const next = new Set(current)
+      for (const key of otherKeys) {
+        if (collapse) next.add(key)
+        else next.delete(key)
+      }
+      return next
+    })
+  }
+
+  function toggleWorkspaceExpanded(key: string): void {
+    setExpandedWorkspacePaths((current) => {
+      const next = new Set(current)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }
+
+  function chooseGroupBy(next: SidebarGroupBy): void {
+    setGroupBy(next)
+    try {
+      window.localStorage.setItem(SIDEBAR_GROUP_BY_KEY, next)
+    } catch {
+      // The choice still applies for this visit.
+    }
+    dismissContextMenu()
+  }
+
+  // ── Selection ────────────────────────────────────────────────────
+
+  /** Every regular (not archived) row in the sidebar, in display order. */
+  const selectableRows = useMemo(
+    () => sections.flatMap((section) => section.sessions),
+    [sections],
+  )
+
+  function targetForRow(row: RecentSession): SessionActionTarget {
+    const live = sessions.find((session) =>
+      session.sessionPath === row.sessionPath && session.status !== 'exited'
+    )
+    return { cwd: row.cwd, name: row.name, sessionId: live?.id, sessionPath: row.sessionPath }
+  }
+
+  function selectAll(): void {
+    setSelecting(true)
+    setSelectedPaths(new Set(selectableRows.map((row) => row.sessionPath)))
+  }
+
+  function endSelection(): void {
+    setSelecting(false)
+    setSelectedPaths(new Set())
+  }
+
+  function toggleSelected(sessionPath: string): void {
+    setSelectedPaths((current) => {
+      const next = new Set(current)
+      if (!next.delete(sessionPath)) next.add(sessionPath)
+      return next
+    })
+  }
+
+  const selectedRows = selectableRows.filter((row) => selectedPaths.has(row.sessionPath))
+  const selectedRunning = selectedRows.some((row) => targetForRow(row).sessionId)
+
+  async function archiveSelected(): Promise<void> {
+    setBulkBusy(true)
+    try {
+      for (const row of selectedRows) await onArchiveSession(targetForRow(row))
+      endSelection()
+    } catch (cause) {
+      onError(cause)
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  async function deleteSelected(): Promise<void> {
+    setBulkBusy(true)
+    try {
+      for (const row of selectedRows) await onDeleteSession(targetForRow(row))
+      endSelection()
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -304,8 +499,11 @@ export function WorkspaceSidebar({
     }
   }
 
-  /** Renders one session row; archived rows keep every action behind the context menu. */
-  function renderSessionRow(recentSession: RecentSession, archived: boolean) {
+  /**
+   * Renders one session row; archived rows keep every action behind the context menu. Outside
+   * the folder view a row also names its project. In selection mode a click selects the row.
+   */
+  function renderSessionRow(recentSession: RecentSession, archived: boolean, showProject: boolean) {
     const activeSession = sessions.find((session) =>
       session.sessionPath === recentSession.sessionPath
       && session.status !== 'exited'
@@ -322,36 +520,44 @@ export function WorkspaceSidebar({
     const subject: ContextMenuSubject = {
       kind: 'session',
       archived,
-      target: {
-        cwd: recentSession.cwd,
-        name: recentSession.name,
-        sessionId: activeSession?.id,
-        sessionPath: recentSession.sessionPath,
-      },
+      target: targetForRow(recentSession),
     }
+    const checkable = selecting && !archived
+    const checked = checkable && selectedPaths.has(recentSession.sessionPath)
+    const projectName = showProject ? projectNames.get(recentSession.cwd) : undefined
     return (
       <Tooltip
         key={recentSession.sessionPath}
-        hint='Right-click for rename, archive, and delete'
+        hint={checkable ? 'Click to select' : 'Right-click for rename, archive, and delete'}
         label={`${recentSession.name}\n${
           new Date(recentSession.updatedAt).toLocaleString('en-US')
         }`}
       >
         <button
-          aria-haspopup='menu'
+          aria-haspopup={checkable ? undefined : 'menu'}
+          aria-pressed={checkable ? checked : undefined}
           className={`session-item${archived ? ' archived' : ''}${
             activeSession?.id === selectedId ? ' selected' : ''
-          }${indicator ? ` ${indicator}` : ''}`}
+          }${checked ? ' checked' : ''}${indicator ? ` ${indicator}` : ''}`}
           disabled={openingSessionPath === recentSession.sessionPath}
           onContextMenu={(event) => openContextMenu(subject, event)}
           onKeyDown={(event) => openContextMenuFromKeyboard(subject, event)}
-          onClick={() => openRow(recentSession)}
+          onClick={() =>
+            checkable ? toggleSelected(recentSession.sessionPath) : openRow(recentSession)}
           ref={activeSession?.id === selectedId ? selectedSessionRef : undefined}
           type='button'
         >
+          {checkable && (
+            <span
+              aria-hidden='true'
+              className='session-check'
+              data-checked={checked}
+            />
+          )}
           {indicator && <SessionStatusIndicator status={indicator} />}
           <span>
             <strong>{sessionLabel}</strong>
+            {projectName && <small className='session-project'>{projectName}</small>}
           </span>
         </button>
       </Tooltip>
@@ -359,11 +565,15 @@ export function WorkspaceSidebar({
   }
 
   const menuSubject = contextMenu?.subject
+  const allCollapsed = sections.length > 0 && sections.every(isSectionCollapsed)
+  const noneCollapsed = sections.every((section) => !isSectionCollapsed(section))
+  const groupByLabel = SIDEBAR_GROUP_BY_OPTIONS.find((option) => option.id === groupBy)?.label
 
   return (
     <aside
       aria-label='Session sidebar'
       className={`sidebar${collapsed ? ' collapsed' : ''}`}
+      onContextMenu={openSidebarContextMenu}
     >
       <div className='sidebar-rail'>
         <Tooltip label='Expand session sidebar'>
@@ -374,7 +584,7 @@ export function WorkspaceSidebar({
             onClick={onToggleCollapsed}
             type='button'
           >
-            <SidebarToggleIcon collapsed />
+            <PanelIcon side='left' />
           </button>
         </Tooltip>
       </div>
@@ -390,16 +600,51 @@ export function WorkspaceSidebar({
         role='separator'
         tabIndex={0}
       />
-      <div className='brand'>
-        <span className='brand-mark'>π</span>
-        <div>
-          <strong>Pi Local AI</strong>
-          <small>Local workspaces</small>
+      <header className='sidebar-header'>
+        <div className='sidebar-banner'>
+          <SidebarBanner image={bannerImage} />
+          <Tooltip label='Change banner'>
+            <button
+              aria-label='Change banner'
+              className='sidebar-banner-edit'
+              onClick={onChangeBanner}
+              type='button'
+            >
+              <PencilIcon />
+            </button>
+          </Tooltip>
         </div>
+      </header>
+      <div aria-label='Sidebar actions' className='sidebar-toolbar' role='toolbar'>
+        <Tooltip label='New session'>
+          <button
+            aria-label='New session'
+            className='sidebar-tool sidebar-tool-primary'
+            onClick={onNewSession}
+            type='button'
+          >
+            <PlusIcon />
+            <span>New</span>
+          </button>
+        </Tooltip>
+        <span className='sidebar-toolbar-spacer' />
+        <Tooltip label={reloadUnavailable ?? 'Reload Pi for this session (/reload)'}>
+          <span className='sidebar-tool-wrap'>
+            <button
+              aria-label='Reload Pi for this session'
+              className={`sidebar-tool${reloading ? ' spinning' : ''}`}
+              disabled={Boolean(reloadUnavailable) || reloading}
+              onClick={() => void reload()}
+              type='button'
+            >
+              <ReloadIcon />
+            </button>
+          </span>
+        </Tooltip>
         <Tooltip label='Settings'>
           <button
             aria-label='Open settings'
-            className='settings-button'
+            className='sidebar-tool'
             onClick={onOpenSettings}
             type='button'
           >
@@ -414,99 +659,149 @@ export function WorkspaceSidebar({
             onClick={onToggleCollapsed}
             type='button'
           >
-            <SidebarToggleIcon collapsed={false} />
+            <PanelIcon side='left' />
           </button>
         </Tooltip>
       </div>
-      <button className='new-session' onClick={onNewSession} type='button'>
-        ＋ New workspace
-      </button>
-      <nav className='workspace-sections' aria-label='Workspaces and their Pi sessions'>
+      {selecting && (
+        <div aria-label='Selected sessions' className='sidebar-selection-bar' role='toolbar'>
+          <span className='sidebar-selection-count' role='status'>
+            {selectedRows
+              .length} selected
+          </span>
+          <button
+            disabled={bulkBusy || selectedRows
+                  .length === selectableRows
+                  .length}
+            onClick={selectAll}
+            type='button'
+          >
+            All
+          </button>
+          <button
+            disabled={bulkBusy || selectedRows
+                  .length === 0}
+            onClick={() =>
+              void archiveSelected()}
+            type='button'
+          >
+            {bulkBusy ? '…' : 'Archive'}
+          </button>
+          <button
+            className='danger'
+            disabled={bulkBusy || selectedRows
+                  .length === 0}
+            onClick={() =>
+              setBulkDeleteOpen(true)}
+            type='button'
+          >
+            Delete…
+          </button>
+          <button disabled={bulkBusy} onClick={endSelection} type='button'>
+            Done
+          </button>
+        </div>
+      )}
+      <nav className='workspace-sections' aria-label='Projects and sessions'>
         {isRefreshing && groups.length === 0 && (
           <p className='session-list-loading' role='status'>Loading sessions…</p>
         )}
-        {groups.map((group, index) => {
-          const groupCollapsed = collapsedWorkspacePaths.has(group.path)
-          const expanded = expandedWorkspacePaths.has(group.path)
-          const hiddenSessionCount = group.sessions.length - visibleWorkspaceSessionCount
+        {sections.map((section, index) => {
+          const group = section.project
+          const sectionCollapsed = isSectionCollapsed(section)
+          const expanded = expandedWorkspacePaths.has(section.key)
+          const hiddenSessionCount = section.sessions.length - visibleWorkspaceSessionCount
           const visibleSessions = expanded
-            ? group.sessions
-            : group.sessions.slice(0, visibleWorkspaceSessionCount)
+            ? section.sessions
+            : section.sessions.slice(0, visibleWorkspaceSessionCount)
           const listId = `workspace-section-${index}`
           const archivedListId = `${listId}-archived`
-          const archiveOpen = archiveOpenPaths.has(group.path)
-          const workspaceSubject: ContextMenuSubject = { kind: 'workspace', group }
+          const archiveOpen = archiveOpenPaths.has(section.key)
+          const workspaceSubject: ContextMenuSubject | undefined = group
+            ? { kind: 'workspace', group }
+            : undefined
           return (
-            <section className='workspace-section' key={group.path}>
+            <section className='workspace-section' key={section.key}>
               <div className='workspace-section-header'>
-                <Tooltip hint='Right-click to rename' label={group.path}>
+                <Tooltip
+                  hint={group ? 'Right-click to rename' : undefined}
+                  label={group ? group.path : section.name}
+                >
                   <button
                     aria-controls={listId}
-                    aria-expanded={!groupCollapsed}
-                    aria-haspopup='menu'
+                    aria-expanded={!sectionCollapsed}
+                    aria-haspopup={workspaceSubject ? 'menu' : undefined}
                     className='workspace-section-toggle'
-                    onClick={() => toggleWorkspace(group.path)}
-                    onContextMenu={(event) => openContextMenu(workspaceSubject, event)}
-                    onKeyDown={(event) => openContextMenuFromKeyboard(workspaceSubject, event)}
+                    onClick={() => toggleSection(section)}
+                    onContextMenu={workspaceSubject
+                      ? (event) => openContextMenu(workspaceSubject, event)
+                      : undefined}
+                    onKeyDown={workspaceSubject
+                      ? (event) => openContextMenuFromKeyboard(workspaceSubject, event)
+                      : undefined}
                     type='button'
                   >
-                    <ChevronIcon collapsed={groupCollapsed} />
-                    <span className='workspace-section-name'>{group.name}</span>
-                    <span className='workspace-section-count'>{group.sessions.length}</span>
+                    <ChevronIcon collapsed={sectionCollapsed} />
+                    <span className='workspace-section-name'>{section.name}</span>
+                    <span className='workspace-section-count'>{section.sessions.length}</span>
                   </button>
                 </Tooltip>
-                <Tooltip label={`New session in ${group.name}`}>
-                  <button
-                    aria-label={`New session in ${group.name}`}
-                    className='workspace-section-new'
-                    disabled={creatingInPath === group.path}
-                    onClick={() => void createInWorkspace(group.path)}
-                    type='button'
-                  >
-                    {creatingInPath === group.path ? '…' : '＋'}
-                  </button>
-                </Tooltip>
+                {group && (
+                  <Tooltip label={`New session in ${group.name}`}>
+                    <button
+                      aria-label={`New session in ${group.name}`}
+                      className='workspace-section-new'
+                      disabled={creatingInPath === group.path}
+                      onClick={() => void createInWorkspace(group.path)}
+                      type='button'
+                    >
+                      {creatingInPath === group.path ? '…' : '＋'}
+                    </button>
+                  </Tooltip>
+                )}
               </div>
-              {!groupCollapsed && (
+              {!sectionCollapsed && (
                 <div className='session-list' id={listId}>
-                  {visibleSessions.map((recentSession) => renderSessionRow(recentSession, false))}
+                  {visibleSessions.map((recentSession) =>
+                    renderSessionRow(recentSession, false, !group)
+                  )}
                   {hiddenSessionCount > 0 && (
                     <button
                       aria-controls={listId}
                       aria-expanded={expanded}
                       className='session-list-more'
-                      onClick={() => toggleWorkspaceExpanded(group.path)}
+                      onClick={() => toggleWorkspaceExpanded(section.key)}
                       type='button'
                     >
                       {expanded ? 'Show less' : `Show ${hiddenSessionCount} more`}
                     </button>
                   )}
-                  {group.archivedSessions.length > 0 && (
+                  {section.archivedSessions.length > 0 && (
                     <button
                       aria-controls={archivedListId}
                       aria-expanded={archiveOpen}
                       className='session-list-more'
-                      onClick={() => toggleArchiveOpen(group.path)}
+                      onClick={() => toggleArchiveOpen(section.key)}
                       type='button'
                     >
                       {archiveOpen
                         ? 'Hide archived'
-                        : `Archived (${group.archivedSessions.length})`}
+                        : `Archived (${section.archivedSessions.length})`}
                     </button>
                   )}
-                  {archiveOpen && group.archivedSessions.length > 0 && (
+                  {archiveOpen && section.archivedSessions.length > 0 && (
                     <div
-                      aria-label={`Archived sessions in ${group.name}`}
+                      aria-label={`Archived sessions in ${section.name}`}
                       className='session-list-archived'
                       id={archivedListId}
                       role='group'
                     >
-                      {group.archivedSessions.map((recentSession) =>
-                        renderSessionRow(recentSession, true)
+                      {section.archivedSessions.map((recentSession) =>
+                        renderSessionRow(recentSession, true, !group)
                       )}
                     </div>
                   )}
-                  {group.sessions.length === 0 && group.archivedSessions.length === 0 && (
+                  {section.sessions.length === 0 && section.archivedSessions.length === 0 && (
                     <p className='workspace-section-empty'>No saved sessions yet.</p>
                   )}
                 </div>
@@ -514,12 +809,122 @@ export function WorkspaceSidebar({
             </section>
           )
         })}
-        {groups.length === 0 && !isRefreshing && (
+        {sections.length === 0 && !isRefreshing && (
           <p className='empty-sidebar'>
-            No workspaces yet. Start a session to open one.
+            Start a session to see its project here.
           </p>
         )}
       </nav>
+      {menuSubject?.kind === 'sidebar' && (
+        <div
+          aria-label='Sidebar actions'
+          className='session-context-menu'
+          ref={contextMenuRef}
+          role='menu'
+          style={{ left: contextMenuPosition.left, top: contextMenuPosition.top }}
+        >
+          <button
+            autoFocus
+            onClick={() => runMenuAction(onNewProject)}
+            onPointerEnter={() => setGroupByMenuOpen(false)}
+            role='menuitem'
+            type='button'
+          >
+            New project
+          </button>
+          <button
+            onClick={() => {
+              dismissContextMenu()
+              setAddFolderOpen(true)
+            }}
+            onPointerEnter={() => setGroupByMenuOpen(false)}
+            role='menuitem'
+            type='button'
+          >
+            New section
+          </button>
+          <hr aria-hidden='true' className='session-context-menu-separator' />
+          <button
+            disabled={selectableRows.length === 0}
+            onClick={() => {
+              dismissContextMenu()
+              selectAll()
+            }}
+            onPointerEnter={() => setGroupByMenuOpen(false)}
+            role='menuitem'
+            type='button'
+          >
+            Select all
+          </button>
+          <div className='session-context-submenu-anchor'>
+            <button
+              aria-expanded={groupByMenuOpen}
+              aria-haspopup='menu'
+              className='session-context-menu-parent'
+              onClick={() => setGroupByMenuOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowRight' || event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setGroupByMenuOpen(true)
+                }
+              }}
+              onPointerEnter={() => setGroupByMenuOpen(true)}
+              role='menuitem'
+              type='button'
+            >
+              <span>Group by</span>
+              <span className='session-context-menu-value'>{groupByLabel}</span>
+              <span aria-hidden='true' className='session-context-menu-arrow'>›</span>
+            </button>
+            {groupByMenuOpen && (
+              <div
+                aria-label='Group by'
+                className='session-context-menu session-context-submenu'
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowLeft') return
+                  event.preventDefault()
+                  setGroupByMenuOpen(false)
+                }}
+                role='menu'
+              >
+                {SIDEBAR_GROUP_BY_OPTIONS.map((option, optionIndex) => (
+                  <button
+                    aria-checked={groupBy === option.id}
+                    autoFocus={optionIndex === 0}
+                    key={option.id}
+                    onClick={() => chooseGroupBy(option.id)}
+                    role='menuitemradio'
+                    type='button'
+                  >
+                    <span aria-hidden='true' className='session-context-menu-check'>
+                      {groupBy === option.id ? '✓' : ''}
+                    </span>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            disabled={allCollapsed}
+            onClick={() => runMenuAction(() => setAllSectionsCollapsed(true))}
+            onPointerEnter={() => setGroupByMenuOpen(false)}
+            role='menuitem'
+            type='button'
+          >
+            Collapse all
+          </button>
+          <button
+            disabled={noneCollapsed}
+            onClick={() => runMenuAction(() => setAllSectionsCollapsed(false))}
+            onPointerEnter={() => setGroupByMenuOpen(false)}
+            role='menuitem'
+            type='button'
+          >
+            Expand all
+          </button>
+        </div>
+      )}
       {menuSubject?.kind === 'session' && (
         <div
           aria-label='Session actions'
@@ -577,14 +982,14 @@ export function WorkspaceSidebar({
       )}
       {menuSubject?.kind === 'workspace' && (
         <div
-          aria-label='Workspace actions'
+          aria-label='Project actions'
           className='session-context-menu'
           ref={contextMenuRef}
           role='menu'
           style={{ left: contextMenuPosition.left, top: contextMenuPosition.top }}
         >
           <button autoFocus onClick={startRename} role='menuitem' type='button'>
-            Rename workspace…
+            Rename project…
           </button>
           {menuSubject.group.customName && (
             <button
@@ -627,11 +1032,57 @@ export function WorkspaceSidebar({
           onConfirm={() => onDeleteSession(deleteTarget)}
         />
       )}
+      {bulkDeleteOpen && (
+        <SessionDeleteDialog
+          count={selectedRows.length}
+          name={selectedRows[0]?.name ?? ''}
+          running={selectedRunning}
+          onClose={() => setBulkDeleteOpen(false)}
+          onConfirm={deleteSelected}
+        />
+      )}
+      {addFolderOpen && (
+        <AddFolderDialog
+          existingPaths={groups.map((group) => group.path)}
+          onAdd={(path) => {
+            // A new folder section must be visible, so the sidebar returns to the folder view.
+            if (groupBy !== 'folder') chooseGroupBy('folder')
+            onAddWorkspace(path)
+          }}
+          onClose={() => setAddFolderOpen(false)}
+          onError={onError}
+        />
+      )}
     </aside>
   )
 }
 
-function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
+function readGroupBy(): SidebarGroupBy {
+  try {
+    return parseSidebarGroupBy(window.localStorage.getItem(SIDEBAR_GROUP_BY_KEY))
+  } catch {
+    return 'folder'
+  }
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      aria-hidden='true'
+      fill='none'
+      height='15'
+      stroke='currentColor'
+      strokeLinecap='round'
+      strokeWidth='2'
+      viewBox='0 0 24 24'
+      width='15'
+    >
+      <path d='M12 5v14M5 12h14' />
+    </svg>
+  )
+}
+
+function ReloadIcon() {
   return (
     <svg
       aria-hidden='true'
@@ -644,8 +1095,27 @@ function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
       viewBox='0 0 24 24'
       width='16'
     >
-      <path d='M3 3v18' />
-      <path d={collapsed ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6'} />
+      <path d='M20 11.5A8 8 0 1 1 17.7 6' />
+      <path d='M20 4v5h-5' />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden='true'
+      fill='none'
+      height='13'
+      stroke='currentColor'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      strokeWidth='1.75'
+      viewBox='0 0 24 24'
+      width='13'
+    >
+      <path d='M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16v4Z' />
+      <path d='m13.5 6.5 4 4' />
     </svg>
   )
 }

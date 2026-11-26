@@ -7,7 +7,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const child = spawn(npmCommand, ['run', 'dev'], {
   cwd: projectRoot,
-  shell: false,
+  shell: true,
   stdio: 'inherit',
 })
 

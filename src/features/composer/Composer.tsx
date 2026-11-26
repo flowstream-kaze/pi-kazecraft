@@ -10,35 +10,28 @@ import {
   type FormEvent,
 } from 'react'
 import { Tooltip } from '../../components/Tooltip.tsx'
-import type {
-  JsonObject,
-  PromptTemplate,
-  SessionSnapshot,
-  SessionSummary,
-} from '../../../shared/types.ts'
+import type { JsonObject, SessionSnapshot, SessionSummary } from '../../../shared/types.ts'
+import {
+  attachmentAccept,
+  isDocumentAttachment,
+  isImageAttachment,
+  maxAttachmentBytes,
+  messageWithAttachments,
+} from '../../../shared/attachments.ts'
+import { uploadAttachment } from '../../api.ts'
+import { ContextChip } from './ContextChip.tsx'
 import { maxComposerImages, prepareComposerImage, type ComposerImage } from './composer-images.ts'
 import {
-  ensureCompactCommand,
-  formatTokens,
-  isCommandDraft,
-  isCompactCommandDraft,
-  isObject,
-  readComposerDraft,
-} from './composer-utils.ts'
+  parseBuiltinCommand,
+  slashMenuCommands,
+  type ParsedBuiltinCommand,
+} from './builtin-commands.ts'
+import { isCommandDraft, isObject, readComposerDraft } from './composer-utils.ts'
 import { AgentSelect } from './selects/AgentSelect.tsx'
 import { BehaviorSelect } from './selects/BehaviorSelect.tsx'
 import { ModelSelect } from './selects/ModelSelect.tsx'
-import { PromptSelect } from './selects/PromptSelect.tsx'
 import { ThinkingSelect } from './selects/ThinkingSelect.tsx'
-import { ComposerSelect } from './selects/ComposerSelect.tsx'
-import { ComposerStatusBar } from './status-bar/ComposerStatusBar.tsx'
-
-/** Static options for the Improve-prompt dropdown; hoisted to a module constant so the select never re-renders for it. */
-const improveOptions = [
-  { label: 'Clarify', value: 'clarify' },
-  { label: 'Ideate', value: 'ideate' },
-  { label: 'Precise', value: 'precise' },
-]
+import { VoiceSelect } from './selects/VoiceSelect.tsx'
 
 /** Provides user input and session commands while reflecting the current Pi state. */
 export const Composer = memo(function Composer({
@@ -53,13 +46,11 @@ export const Composer = memo(function Composer({
   onAgentChange,
   onRequestAgentOptions,
   onCommand,
+  onBuiltinCommand,
   commands,
   running,
-  compacting,
   onSend,
   onAbort,
-  onImprovePrompt,
-  onSavePrompt,
   onError,
   requestedSelect,
   onSelectOpened,
@@ -79,9 +70,10 @@ export const Composer = memo(function Composer({
   onAgentChange: (agent: string) => void
   onRequestAgentOptions: () => void
   onCommand: (command: JsonObject) => Promise<JsonObject>
+  /** Runs one of Pi's built-in terminal commands, which Pi does not accept over RPC. */
+  onBuiltinCommand: (command: ParsedBuiltinCommand) => Promise<void>
   commands: JsonObject[]
   running: boolean
-  compacting: boolean
   onSend: (
     message: string,
     images: JsonObject[],
@@ -89,15 +81,6 @@ export const Composer = memo(function Composer({
     isCommand: boolean,
   ) => Promise<void>
   onAbort: () => Promise<JsonObject>
-  onImprovePrompt: (
-    prompt: string,
-    direction?: string,
-  ) => Promise<{ prompt: string; cost?: number }>
-  onSavePrompt: (
-    scope: 'global' | 'project',
-    name: string,
-    content: string,
-  ) => Promise<PromptTemplate>
   onError: (cause: unknown) => void
   requestedSelect?: 'agent' | 'model' | 'thinking' | null
   onSelectOpened?: () => void
@@ -110,25 +93,14 @@ export const Composer = memo(function Composer({
   const [message, setMessage] = useState(() => readComposerDraft(draftStorageKey))
   const [images, setImages] = useState<ComposerImage[]>([])
   const [preparingImages, setPreparingImages] = useState(false)
+  /** Documents already saved in the session folder; the message names their paths when sent. */
+  const [documents, setDocuments] = useState<{ id: string; name: string; path: string }[]>([])
+  const [uploadingDocuments, setUploadingDocuments] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [improving, setImproving] = useState(false)
-  const [improvePreset, setImprovePreset] = useState('')
-  const [previewingPrompt, setPreviewingPrompt] = useState(false)
-  const [savedPrompts, setSavedPrompts] = useState<PromptTemplate[]>([])
-  const [promptSave, setPromptSave] = useState<{
-    content: string
-    name: string
-    scope: 'global' | 'project'
-  }>()
-  const [savingPrompt, setSavingPrompt] = useState(false)
-  const [suggestion, setSuggestion] = useState<
-    { original: string; improved: string; cost?: number }
-  >()
   const [openSelect, setOpenSelect] = useState<'agent' | 'model' | 'thinking' | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
-  const promptSaveDialogRef = useRef<HTMLDialogElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const promptPreviewOriginal = useRef<string | undefined>(undefined)
   const agentTriggerRef = useRef<HTMLButtonElement>(null)
   const modelTriggerRef = useRef<HTMLButtonElement>(null)
   const thinkingTriggerRef = useRef<HTMLButtonElement>(null)
@@ -152,18 +124,13 @@ export const Composer = memo(function Composer({
   // Keep a ref to the latest draft so stable callbacks can read it without re-creating on every keystroke.
   const messageRef = useRef(message)
   messageRef.current = message
-  /** Snapshot commands augmented with the local compact command when Pi doesn't expose it. */
-  const allCommands = ensureCompactCommand(commands)
-  const commandPending = isCommandDraft(message, allCommands)
-  const promptTemplates = useMemo(() =>
-    [...savedPrompts, ...snapshot.promptTemplates].filter((
-      prompt,
-      index,
-      all,
-    ) => all.findIndex((candidate) => candidate.name === prompt.name) === index), [
-    savedPrompts,
-    snapshot.promptTemplates,
-  ])
+  /** Pi's own commands plus the built-in terminal commands this app runs itself. */
+  const allCommands = useMemo(() => slashMenuCommands(commands), [commands])
+  const hasAttachments = images.length > 0 || documents.length > 0
+  const attachmentsBusy = preparingImages || uploadingDocuments > 0
+  const builtinPending = hasAttachments ? null : parseBuiltinCommand(message, commands)
+  const piCommandPending = isCommandDraft(message, commands)
+  const commandPending = piCommandPending || builtinPending !== null
 
   // Stable open-change handlers so memoized selects never re-render on a keystroke.
   const handleAgentOpenChange = useCallback(
@@ -178,15 +145,10 @@ export const Composer = memo(function Composer({
     (open: boolean) => setOpenSelect(open ? 'thinking' : null),
     [],
   )
-  const handlePromptOpenChange = useCallback(() => setOpenSelect(null), [])
 
   useEffect(() => {
     if (submitRequest > 0) formRef.current?.requestSubmit()
   }, [submitRequest])
-
-  useEffect(() => {
-    if (promptSave && !promptSaveDialogRef.current?.open) promptSaveDialogRef.current?.showModal()
-  }, [promptSave])
 
   // oxlint-disable react-hooks/exhaustive-deps
   useEffect(() => {
@@ -235,12 +197,11 @@ export const Composer = memo(function Composer({
   }, [draftStorageKey])
 
   // Flush the pending draft on unmount so switching sessions within the debounce window cannot drop the write.
-  // During a prompt preview messageRef holds the preview text; prefer the saved original so the preview is never persisted.
   useEffect(() => {
     return () => {
       if (draftPersistTimerRef.current) {
         window.clearTimeout(draftPersistTimerRef.current)
-        persistDraft(promptPreviewOriginal.current ?? messageRef.current)
+        persistDraft(messageRef.current)
       }
     }
   }, [persistDraft])
@@ -288,111 +249,39 @@ export const Composer = memo(function Composer({
     setSlashIndex(-1)
   }, [setDraftMessage])
 
-  /** Shows a template without persisting it, retaining the existing draft until a selection is made. */
-  const previewPrompt = useCallback((prompt: PromptTemplate): void => {
-    if (promptPreviewOriginal.current === undefined)
-      promptPreviewOriginal.current = messageRef.current
-    setPreviewingPrompt(true)
-    setMessage(prompt.content)
-  }, [])
-
-  /** Restores the draft when a prompt menu preview ends without an explicit selection. */
-  const endPromptPreview = useCallback((): void => {
-    if (promptPreviewOriginal.current === undefined) return
-    setMessage(promptPreviewOriginal.current)
-    messageRef.current = promptPreviewOriginal.current
-    promptPreviewOriginal.current = undefined
-    setPreviewingPrompt(false)
-  }, [])
-
-  /** Replaces and persists the draft after a prompt template has been explicitly selected. */
-  const selectPrompt = useCallback((prompt: PromptTemplate): void => {
-    promptPreviewOriginal.current = undefined
-    setPreviewingPrompt(false)
-    setDraftMessage(prompt.content)
-    textareaRef.current?.focus()
-  }, [setDraftMessage])
-
-  /** Opens a blank naming dialog for the selected Pi prompt scope. */
-  const openPromptSaveDialog = useCallback((scope: 'global' | 'project'): void => {
-    setPromptSave({ content: messageRef.current, name: '', scope })
-  }, [])
-
-  /** Persists the named template while keeping the dialog open when the backend rejects it. */
-  async function savePrompt(): Promise<void> {
-    if (!promptSave || savingPrompt) return
-    if (!promptSaveDialogRef.current?.querySelector('input')?.reportValidity()) return
-    setSavingPrompt(true)
-    try {
-      const saved = await onSavePrompt(promptSave.scope, promptSave.name, promptSave.content)
-      setSavedPrompts((current) => [
-        saved,
-        ...current.filter((prompt) => prompt.name !== saved.name),
-      ])
-      promptSaveDialogRef.current?.close()
-      setPromptSave(undefined)
-    } catch (cause) {
-      onError(cause)
-    } finally {
-      setSavingPrompt(false)
-    }
-  }
-
   /** Sends text and images in the same RPC command, restoring the draft on failure. */
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     const nextMessage = message.trim()
-    if (preparingImages || (!nextMessage && images.length === 0)) return
+    if (attachmentsBusy || (!nextMessage && !hasAttachments)) return
     if (images.length > 0 && !supportsImages) {
       onError('The selected model does not accept images.')
       return
     }
     setSubmitting(true)
-    setSuggestion(undefined)
     setDraftMessage('')
     setImages([])
+    setDocuments([])
     try {
-      if (isCompactCommandDraft(nextMessage)) {
-        await onCommand({ type: 'compact' })
+      if (builtinPending) {
+        await onBuiltinCommand(builtinPending)
         return
       }
       await onSend(
-        nextMessage,
+        messageWithAttachments(nextMessage, documents.map(({ path }) => path)),
         images.map(({ data, mimeType }) => ({ type: 'image', data, mimeType })),
         behavior,
-        commandPending,
+        piCommandPending && documents.length === 0,
       )
     } catch (cause) {
       setDraftMessage(nextMessage)
       setImages(images)
+      setDocuments(documents)
       onError(cause)
     } finally {
       setSubmitting(false)
     }
   }
-
-  /** Produces an isolated rewrite while preserving the source text for an explicit comparison. */
-  const improveDraft = useCallback(async (direction?: string): Promise<void> => {
-    const original = messageRef.current.trim()
-    if (!original || improving) return
-    setImproving(true)
-    setSuggestion(undefined)
-    try {
-      const result = await onImprovePrompt(original, direction)
-      setSuggestion({ original, improved: result.prompt, cost: result.cost })
-    } catch (cause) {
-      onError(cause)
-    } finally {
-      setImproving(false)
-      setImprovePreset('')
-    }
-  }, [improving, onImprovePrompt, onError])
-
-  /** Triggers an isolated rewrite when the user picks an Improve preset. */
-  const handleImproveValueChange = useCallback((value: string) => {
-    setImprovePreset(value)
-    void improveDraft(value)
-  }, [improveDraft])
 
   /** Prepares pasted images locally to bound the HTTP body and context sent to the model. */
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>): Promise<void> {
@@ -408,6 +297,11 @@ export const Composer = memo(function Composer({
         `${message.slice(0, selectionStart)}${pastedText}${message.slice(selectionEnd)}`,
       )
 
+    await addImages(files)
+  }
+
+  /** Prepares images locally to bound the HTTP body and context sent to the model. */
+  async function addImages(files: File[]): Promise<void> {
     const remaining = maxComposerImages - images.length
     if (remaining <= 0) {
       onError(`A message can contain at most ${maxComposerImages} images.`)
@@ -427,30 +321,49 @@ export const Composer = memo(function Composer({
     }
   }
 
-  const stats = snapshot.stats
-  const contextUsage = stats?.contextUsage
-  const contextPercentValue = typeof contextUsage?.percent === 'number'
-    ? Math.round(contextUsage.percent)
-    : null
-  const contextPercent = contextPercentValue === null ? '—' : `${contextPercentValue}%`
-  const contextTokens = typeof contextUsage
-          ?.tokens === 'number' && typeof contextUsage.contextWindow === 'number'
-    ? `${formatTokens(contextUsage.tokens)}/${formatTokens(contextUsage.contextWindow)}`
-    : 'Unavailable'
-  const cost = typeof stats?.cost === 'number' ? `$${stats.cost.toFixed(2)}` : '—'
-  const contextClass = typeof contextUsage?.percent === 'number'
-    ? contextUsage.percent >= 40
-      ? 'context-danger'
-      : contextUsage.percent >= 30
-      ? 'context-warning-strong'
-      : contextUsage.percent >= 20
-      ? 'context-warning'
-      : ''
-    : ''
+  /**
+   * Handles files from the attach button: images join the message, documents are saved into the
+   * session folder so Pi can open them, and anything else is reported.
+   */
+  async function attachFiles(files: File[]): Promise<void> {
+    if (files.length === 0 || submitting) return
+    const imageFiles = files.filter(isImageAttachment)
+    const documentFiles = files.filter((file) =>
+      !isImageAttachment(file) && isDocumentAttachment(file.name)
+    )
+    const rejected = files.filter((file) =>
+      !isImageAttachment(file) && !isDocumentAttachment(file.name)
+    )
+    if (rejected.length > 0) {
+      onError(`Pi cannot read ${rejected.map((file) => file.name).join(', ')}.`)
+    }
+    if (imageFiles.length > 0) {
+      if (supportsImages) await addImages(imageFiles)
+      else onError(
+          'The selected model does not accept images; choose one that does to attach pictures.',
+        )
+    }
+    await Promise.all(documentFiles.map(async (file) => {
+      if (file.size > maxAttachmentBytes) {
+        onError(`${file.name} is larger than ${maxAttachmentBytes / 1024 / 1024} MB.`)
+        return
+      }
+      setUploadingDocuments((count) => count + 1)
+      try {
+        const path = await uploadAttachment(session.cwd, file)
+        setDocuments((current) => [...current, { id: crypto.randomUUID(), name: file.name, path }])
+      } catch (cause) {
+        onError(cause)
+      } finally {
+        setUploadingDocuments((count) => count - 1)
+      }
+    }))
+    textareaRef.current?.focus()
+  }
 
   return (
     <form
-      className={`composer${previewingPrompt ? ' previewing-prompt' : ''}`}
+      className='composer'
       onSubmit={(event) => void submit(event)}
       ref={formRef}
     >
@@ -472,6 +385,47 @@ export const Composer = memo(function Composer({
               </button>
             </div>
           ))}
+        </div>
+      )}
+      {(documents.length > 0 || uploadingDocuments > 0) && (
+        <div aria-label='Files to send' className='composer-documents'>
+          {documents
+            .map((document) => (
+              <Tooltip
+                key={document.id}
+                label={document
+                  .path}
+              >
+                <div className='composer-document'>
+                  <FileIcon />
+                  <span>
+                    {document
+                      .name}
+                  </span>
+                  <button
+                    aria-label={`Remove ${document.name}`}
+                    disabled={submitting}
+                    onClick={() =>
+                      setDocuments((current) =>
+                        current
+                          .filter(({ id }) =>
+                            id !== document
+                              .id
+                          )
+                      )}
+                    type='button'
+                  >
+                    ×
+                  </button>
+                </div>
+              </Tooltip>
+            ))}
+          {uploadingDocuments > 0 && (
+            <div className='composer-document uploading' role='status'>
+              <FileIcon />
+              <span>Adding {uploadingDocuments} file{uploadingDocuments === 1 ? '' : 's'}…</span>
+            </div>
+          )}
         </div>
       )}
       {slashOpen && filteredCommands.length > 0 && (
@@ -530,6 +484,15 @@ export const Composer = memo(function Composer({
             if (event.key === 'Enter' || event.key === 'Tab') {
               event.preventDefault()
               const target = slashIndex >= 0 ? filteredCommands[slashIndex] : filteredCommands[0]
+              // Enter on a command already typed in full runs it rather than inserting it again.
+              if (
+                event.key === 'Enter' && target
+                && message.trim().toLowerCase() === `/${String(target.name).toLowerCase()}`
+              ) {
+                setSlashOpen(false)
+                event.currentTarget.form?.requestSubmit()
+                return
+              }
               if (target) selectSlashCommand(String(target.name))
               return
             }
@@ -543,53 +506,6 @@ export const Composer = memo(function Composer({
         placeholder='Ask Pi…  / for commands'
         rows={3}
       />
-      {suggestion && (
-        <section
-          aria-label='Prompt improvement suggestion'
-          aria-live='polite'
-          className='prompt-suggestion'
-        >
-          <div className='prompt-comparison'>
-            <div>
-              <strong>Original</strong>
-              <p>{suggestion.original}</p>
-            </div>
-            <div>
-              <strong>Suggestion</strong>
-              <p>{suggestion.improved}</p>
-            </div>
-          </div>
-          <div className='prompt-suggestion-meta'>
-            {suggestion.cost !== undefined && (
-              <span className='prompt-improvement-cost'>
-                Improvement cost: ${suggestion.cost.toFixed(4)}
-              </span>
-            )}
-          </div>
-          <div className='prompt-suggestion-actions'>
-            <button
-              onClick={() => {
-                setSuggestion(undefined)
-                textareaRef.current?.focus()
-              }}
-              type='button'
-            >
-              Ignore
-            </button>
-            <button
-              className='accept'
-              onClick={() => {
-                setDraftMessage(suggestion.improved)
-                setSuggestion(undefined)
-                textareaRef.current?.focus()
-              }}
-              type='button'
-            >
-              Use suggestion
-            </button>
-          </div>
-        </section>
-      )}
       <div className='composer-footer'>
         <div className='composer-actions'>
           <div className='composer-tools'>
@@ -606,6 +522,40 @@ export const Composer = memo(function Composer({
                 triggerRef={agentTriggerRef}
               />
             )}
+            <Tooltip label='Attach images, PDF, Word, Excel or text files'>
+              <button
+                aria-label='Attach files'
+                className='composer-attach'
+                disabled={submitting}
+                onClick={() => fileInputRef.current?.click()}
+                type='button'
+              >
+                <svg
+                  aria-hidden='true'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeLinecap='round'
+                  strokeWidth='2'
+                  viewBox='0 0 24 24'
+                >
+                  <path d='M12 5v14M5 12h14' />
+                </svg>
+              </button>
+            </Tooltip>
+            <input
+              accept={attachmentAccept}
+              aria-hidden='true'
+              hidden
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? [])
+                event.target.value = ''
+                void attachFiles(files)
+              }}
+              ref={fileInputRef}
+              tabIndex={-1}
+              type='file'
+            />
             <ModelSelect
               models={snapshot.models}
               currentModel={currentModel}
@@ -623,31 +573,9 @@ export const Composer = memo(function Composer({
               onOpenChange={handleThinkingOpenChange}
               triggerRef={thinkingTriggerRef}
             />
-            <Tooltip label='Insert a configured prompt'>
-              <PromptSelect
-                canSave={Boolean(message.trim()) && !previewingPrompt}
-                onOpenChange={handlePromptOpenChange}
-                onPreview={previewPrompt}
-                onPreviewEnd={endPromptPreview}
-                onSave={openPromptSaveDialog}
-                onSelect={selectPrompt}
-                prompts={promptTemplates}
-              />
-            </Tooltip>
-
+            <VoiceSelect />
+            <ContextChip stats={snapshot.stats} />
             {running && <BehaviorSelect behavior={behavior} onChange={setBehavior} />}
-            <Tooltip label='Improve prompt'>
-              <ComposerSelect
-                ariaLabel='Improve prompt'
-                disabled={improving || submitting || !message.trim()}
-                onValueChange={handleImproveValueChange}
-                options={improveOptions}
-                loading={improving}
-                placeholder='Improve'
-                tone='improve'
-                value={improvePreset}
-              />
-            </Tooltip>
           </div>
           <div className='composer-primary-actions'>
             <span className='composer-stop-slot'>
@@ -670,8 +598,7 @@ export const Composer = memo(function Composer({
               <button
                 aria-label={commandPending ? 'Run command' : 'Send message'}
                 className={`icon-button send${commandPending ? ' command' : ''}`}
-                disabled={submitting || preparingImages
-                  || (!message.trim() && images.length === 0)}
+                disabled={submitting || attachmentsBusy || (!message.trim() && !hasAttachments)}
                 type='submit'
               >
                 {commandPending
@@ -689,78 +616,23 @@ export const Composer = memo(function Composer({
             </Tooltip>
           </div>
         </div>
-        <ComposerStatusBar
-          session={session}
-          running={running}
-          compacting={compacting}
-          cost={cost}
-          contextClass={contextClass}
-          contextTokens={contextTokens}
-          contextPercent={contextPercent}
-          contextPercentValue={contextPercentValue}
-        />
       </div>
-      {promptSave && (
-        <dialog
-          aria-labelledby='prompt-save-title'
-          className='prompt-save-dialog'
-          onCancel={(event) => {
-            if (savingPrompt) event.preventDefault()
-            else setPromptSave(undefined)
-          }}
-          onClose={() => setPromptSave(undefined)}
-          ref={promptSaveDialogRef}
-        >
-          <div>
-            <header>
-              <span>{promptSave.scope === 'global' ? 'Global prompt' : 'Project prompt'}</span>
-              <h2 id='prompt-save-title'>Save prompt</h2>
-              <p>
-                {promptSave.scope === 'global'
-                  ? '~/.pi/agent/prompts/<name>.md'
-                  : '.pi/prompts/<name>.md'}
-              </p>
-            </header>
-            <label htmlFor='prompt-save-name'>Prompt name</label>
-            <input
-              aria-describedby='prompt-save-hint'
-              autoFocus
-              id='prompt-save-name'
-              maxLength={80}
-              onChange={(event) => setPromptSave({ ...promptSave, name: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return
-                event.preventDefault()
-                void savePrompt()
-              }}
-              pattern='[A-Za-z0-9][A-Za-z0-9_-]{0,79}'
-              required
-              spellCheck={false}
-              value={promptSave.name}
-            />
-            <small id='prompt-save-hint'>
-              Letters, numbers, hyphens, and underscores. This becomes the /command name.
-            </small>
-            <div className='prompt-save-actions'>
-              <button
-                disabled={savingPrompt}
-                onClick={() => promptSaveDialogRef.current?.close()}
-                type='button'
-              >
-                Cancel
-              </button>
-              <button
-                className='primary'
-                disabled={savingPrompt}
-                onClick={() => void savePrompt()}
-                type='button'
-              >
-                {savingPrompt ? 'Saving…' : 'Save prompt'}
-              </button>
-            </div>
-          </div>
-        </dialog>
-      )}
     </form>
   )
 })
+
+function FileIcon() {
+  return (
+    <svg
+      aria-hidden='true'
+      fill='none'
+      stroke='currentColor'
+      strokeLinejoin='round'
+      strokeWidth='1.6'
+      viewBox='0 0 24 24'
+    >
+      <path d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z' />
+      <path d='M14 3v5h5' />
+    </svg>
+  )
+}

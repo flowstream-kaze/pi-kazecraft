@@ -39,7 +39,7 @@ export const commandDefinitions: CommandDefinition[] = [
   { id: 'open-palette', label: 'Open command palette' },
   { id: 'open-settings', label: 'Open settings' },
   { id: 'open-terminal', label: 'Open terminal' },
-  { id: 'workspace-previous', label: 'Switch to previous workspace' },
+  { id: 'workspace-previous', label: 'Switch to previous project' },
   { id: 'focus-composer', label: 'Focus composer' },
   { id: 'next-session', label: 'Next session' },
   { id: 'previous-session', label: 'Previous session' },

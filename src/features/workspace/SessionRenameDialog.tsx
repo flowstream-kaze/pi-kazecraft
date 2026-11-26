@@ -21,9 +21,9 @@ const subjectCopy = {
     label: 'Session name',
   },
   workspace: {
-    title: 'Rename workspace',
+    title: 'Rename project',
     description: 'Only the sidebar name changes. The folder on disk keeps its name.',
-    label: 'Workspace name',
+    label: 'Project name',
   },
 } as const
 

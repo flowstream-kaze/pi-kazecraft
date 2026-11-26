@@ -614,7 +614,9 @@ test('restarts an exited Pi session when reopening it', { timeout: 10_000 }, asy
   }
 })
 
-test('improves a prompt with the cheapest isolated model', { timeout: 10_000 }, async () => {
+test('improves a prompt on the session model in an isolated process', {
+  timeout: 10_000,
+}, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
   const port = 45_000 + (process.pid % 10_000)
   await writeFakePi(directory)
@@ -640,7 +642,6 @@ test('improves a prompt with the cheapest isolated model', { timeout: 10_000 }, 
     })
     assert.deepEqual(improved.data, {
       prompt: 'Fix the failing behavior and validate the result.',
-      cost: 0.0042,
     })
   } finally {
     client.close()
@@ -676,7 +677,6 @@ test('improves a prompt with a direction preset', { timeout: 10_000 }, async () 
     })
     assert.deepEqual(improved.data, {
       prompt: 'Fix the failing behavior and validate the result.',
-      cost: 0.0042,
     })
   } finally {
     client.close()
@@ -706,6 +706,8 @@ const expectedExtensions = ${
     JSON.stringify([
       join(process.cwd(), 'pi-extensions/ask-user-question.ts'),
       join(process.cwd(), 'pi-extensions/plan.ts'),
+      join(process.cwd(), 'pi-extensions/read-document.ts'),
+      join(process.cwd(), 'pi-extensions/write-office.ts'),
     ])
   }
 const extensionPaths = process.argv.flatMap((argument, index) =>
@@ -785,20 +787,16 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (isolated && command.type === 'get_available_models') {
     console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: { models: [
-      { id: 'expensive', provider: 'test', reasoning: false, cost: { input: 1, output: 5 } },
-      { id: 'cheap', provider: 'test', reasoning: false, cost: { input: 2, output: 1 } }
+      { id: 'listed-first', provider: 'test', reasoning: false },
+      { id: 'session-model', provider: 'test', reasoning: false }
     ] } }))
     return
   }
-  if (isolated && command.type === 'set_model' && command.modelId !== 'cheap') throw new Error('Wrong model selected')
+  if (isolated && command.type === 'set_model' && command.modelId !== 'session-model') throw new Error('Wrong model selected')
   if (isolated && command.type === 'prompt') {
     if (command.message !== '<user_prompt>\\nFix it\\n</user_prompt>') throw new Error('Prompt was not delimited')
     console.log(JSON.stringify({ type: 'response', id: command.id, success: true }))
     setTimeout(() => console.log(JSON.stringify({ type: 'agent_settled' })), 5)
-    return
-  }
-  if (isolated && command.type === 'get_session_stats') {
-    console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: { cost: 0.0042 } }))
     return
   }
   if (isolated && command.type === 'get_messages') {
@@ -816,7 +814,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: {} }))
     return
   }
-  const data = command.type === 'get_state' ? { sessionFile: sessionPath, isStreaming: streaming, isCompacting: false, pendingMessageCount: 0 } : {}
+  const data = command.type === 'get_state' ? { sessionFile: sessionPath, isStreaming: streaming, isCompacting: false, pendingMessageCount: 0, model: { provider: 'test', id: 'session-model' } } : {}
   if (command.type === 'get_state' && emitStartupEvent) {
     console.log(JSON.stringify({ type: 'extension_ui_request', method: 'notify', message: 'Starting' }))
     setTimeout(() => console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data })), 100)

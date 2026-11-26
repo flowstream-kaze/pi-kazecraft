@@ -4,6 +4,7 @@ export const THEME_VARIABLES = [
   'surface',
   'ink',
   'accent',
+  'sidebar-accent',
   'secondary',
   'success',
   'warning',
@@ -16,7 +17,14 @@ export type ThemeMode = 'light' | 'dark'
 
 export type ThemePalette = Record<ThemeVariable, string>
 
-export type BuiltInThemeId = 'light' | 'dark' | 'gipity' | 'anttropik' | 'neon' | 'acidpop'
+export type BuiltInThemeId =
+  | 'light'
+  | 'dark'
+  | 'gipity'
+  | 'anttropik'
+  | 'claude-light'
+  | 'neon'
+  | 'acidpop'
 
 export interface ThemePreset {
   id: BuiltInThemeId
@@ -55,6 +63,7 @@ const LIGHT_PALETTE: ThemePalette = {
   surface: '#ffffff',
   ink: '#1d2924',
   accent: '#23776d',
+  'sidebar-accent': '#23776d',
   secondary: '#6851a4',
   success: '#28734b',
   warning: '#b8860b',
@@ -66,6 +75,7 @@ const DARK_PALETTE: ThemePalette = {
   surface: '#1e2422',
   ink: '#dde3e0',
   accent: '#4fb9ab',
+  'sidebar-accent': '#4fb9ab',
   secondary: '#9d91d4',
   success: '#59ba7c',
   warning: '#d6aa45',
@@ -77,6 +87,7 @@ const GIPITY_PALETTE: ThemePalette = {
   surface: '#f7f7f8',
   ink: '#2d2d2d',
   accent: '#202123',
+  'sidebar-accent': '#202123',
   secondary: '#6e6e80',
   success: '#10a37f',
   warning: '#b7791f',
@@ -88,6 +99,7 @@ const NEON_PALETTE: ThemePalette = {
   surface: '#211a35',
   ink: '#f5efff',
   accent: '#e58ab8',
+  'sidebar-accent': '#e58ab8',
   secondary: '#5de7ff',
   success: '#72f1a8',
   warning: '#ffd166',
@@ -99,10 +111,24 @@ const ANTTROPIK_PALETTE: ThemePalette = {
   surface: '#fffefa',
   ink: '#3d392f',
   accent: '#d97757',
+  'sidebar-accent': '#d97757',
   secondary: '#b56b4d',
   success: '#5d8064',
   warning: '#bd861f',
   danger: '#bd5148',
+}
+
+/** Claude desktop app's default light theme (its CSS variables, converted from HSL). */
+const CLAUDE_LIGHT_PALETTE: ThemePalette = {
+  canvas: '#faf9f5', // --bg-100
+  surface: '#ffffff', // --bg-000
+  ink: '#141413', // --text-000
+  accent: '#c6613f', // --brand-000 (clay, emphasized)
+  'sidebar-accent': '#c6613f',
+  secondary: '#5645a1', // --accent-pro-100
+  success: '#2f7613', // --success-100
+  warning: '#875a08', // --warning-100
+  danger: '#b53333', // --danger-100
 }
 
 const ACID_POP_PALETTE: ThemePalette = {
@@ -110,6 +136,7 @@ const ACID_POP_PALETTE: ThemePalette = {
   surface: '#2f163b',
   ink: '#fff4dc',
   accent: '#ff4db8',
+  'sidebar-accent': '#ff4db8',
   secondary: '#99ff33',
   success: '#57f287',
   warning: '#ffd166',
@@ -122,6 +149,13 @@ export const BUILT_IN_THEMES: ThemePreset[] = [
   { id: 'neon', name: 'Néon', mode: 'dark', palette: NEON_PALETTE, builtIn: true },
   { id: 'gipity', name: 'GiPiTy', mode: 'light', palette: GIPITY_PALETTE, builtIn: true },
   { id: 'anttropik', name: 'AntTropik', mode: 'light', palette: ANTTROPIK_PALETTE, builtIn: true },
+  {
+    id: 'claude-light',
+    name: 'Claude Light',
+    mode: 'light',
+    palette: CLAUDE_LIGHT_PALETTE,
+    builtIn: true,
+  },
   { id: 'acidpop', name: 'Acid Pop', mode: 'dark', palette: ACID_POP_PALETTE, builtIn: true },
 ]
 
@@ -149,6 +183,8 @@ const DERIVED_THEME_VARIABLES = [
   'line-strong',
   'accent-hover',
   'accent-soft',
+  'sidebar-accent-hover',
+  'sidebar-accent-soft',
   'secondary-soft',
   'success-soft',
   'warning-strong',
@@ -197,9 +233,12 @@ function normalizePalette(value: unknown): ThemePalette | null {
     ['danger', 'danger'],
   ]
   if (legacySourceKeys.every(([legacy]) => validateHex(obj[legacy]))) {
-    return Object.fromEntries(
+    const palette = Object.fromEntries(
       legacySourceKeys.map(([legacy, current]) => [current, obj[legacy] as string]),
-    ) as unknown as ThemePalette
+    ) as Record<string, string>
+    // Legacy palettes predate the sidebar accent; default it to the theme's accent.
+    palette['sidebar-accent'] = obj['accent'] as string
+    return palette as unknown as ThemePalette
   }
   return null
 }
@@ -483,6 +522,7 @@ export function applyThemePalette(element: { style: ThemeStyle }, palette: Theme
     element.style.setProperty(`--${variable}`, palette[variable])
   }
   element.style.setProperty('--on-accent', contrastColor(palette.accent))
+  element.style.setProperty('--on-sidebar-accent', contrastColor(palette['sidebar-accent']))
   element.style.setProperty('--on-danger', contrastColor(palette.danger))
 }
 

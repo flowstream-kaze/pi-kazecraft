@@ -4,10 +4,19 @@ These extensions are loaded into every persistent Pi session started by Pi Livec
 
 - `ask-user-question.ts` registers the structured questionnaire tool and bridges its versioned payload through Pi's extension UI protocol.
 - `plan.ts` registers the `update_plan` tool and returns the committed macro plan in its result `details`, which reach the browser without entering the model context.
+- `read-document.ts` registers the `read_document` tool, which reads files Pi's `read` cannot: PDF (page by page, via `unpdf`), Word `.docx` (paragraph text, via `mammoth`) and spreadsheets `.xlsx`, `.xlsm`, `.xls`, `.ods`, `.csv`, `.tsv` (each sheet as CSV, via SheetJS). Output pages like `read`: at most 2,000 lines or 50 KB per call, continued with `offset`. A PDF without a text layer (scanned) returns a note instead of text; `.doc`, PowerPoint and password-protected files return a plain error. The conversion lives in `document-text.ts`, which has no Pi dependency and is covered by `test/read-document.test.ts`. SheetJS is installed from its official CDN (`cdn.sheetjs.com`), because the `xlsx` package on npm is outdated.
 
 `server/pi-process.ts` owns the extension paths. These modules use Pi's public extension API and shared protocols only; they do not define Pi Livecraft HTTP routes.
 
 For requests displayed in the browser, keep the versioned payload parser in `shared/` and the UI-specific recognition and response flow in [`src/features/dialogs/`](/src/features/dialogs/README.md).
+
+- `write-office.ts` registers four tools for creating and changing Office files:
+  - `write_spreadsheet` creates an `.xlsx` from sheets of rows (`spreadsheet-write.ts`, ExcelJS). A string starting with `=` is stored as a formula and an ISO date as a real date; an optional header row is bolded and frozen. Workbooks are marked to recalculate when Excel opens them.
+  - `edit_spreadsheet` applies `set_cells`, `set_rows`, `insert_rows`, `delete_rows`, `add_sheet`, `rename_sheet` and `delete_sheet` to an `.xlsx`, keeping cell styling. Inserting or deleting rows updates formulas across the workbook the way Excel does (`formula-shift.ts`). ExcelJS cannot keep charts, pivot tables, slicers, macros or form controls; `lossyFeatures` detects them and such a workbook is never overwritten in place.
+  - `write_document` builds a `.docx` from Markdown (`word-write.ts`, the `docx` library): headings, inline formatting, links, bullet and numbered lists, tables, block quotes, code blocks and rules.
+  - `edit_document` changes an existing `.docx` by editing its XML directly (`word-edit.ts`, JSZip and xmldom), so untouched parts stay byte-for-byte the same. `replace` matches text within a paragraph even across differently formatted runs and keeps the formatting where the match starts; `append` and `append_to_section` insert Markdown at the end of the document or of a heading's section. Inserted lists use text bullets and links show their address, because the target document's numbering and hyperlink definitions are not modified.
+  - All four write only inside the session folder (links included, `office-paths.ts`), never replace an existing file without `overwrite: true`, and save edits to `<name>.edited.<ext>` unless given `output` or `overwrite: true`.
+  - Covered by `test/write-office.test.ts`. Files from all four tools were opened in Microsoft Excel and Word (read-only, alerts off) without repair prompts, and Excel calculated the formulas, including after rows were inserted and deleted.
 
 ## Add an extension
 

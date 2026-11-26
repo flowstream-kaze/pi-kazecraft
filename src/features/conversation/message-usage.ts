@@ -6,34 +6,45 @@ export interface MessageUsage {
   cacheMiss: number
   cacheRead: number
   cacheWrite: number
-  cost: number
   output: number
 }
 
-/** Extracts final counters associated with a Pi response or tool result. */
+/** Extracts final token counters associated with a Pi response or tool result. */
 export function messageUsage(message: JsonObject): MessageUsage | null {
   const usage = isObject(message.usage) ? message.usage : null
-  const cost = usage && isObject(usage.cost) ? usage.cost : null
   if (
-    !usage || !cost || !isNumber(usage.input) || !isNumber(usage.cacheRead) || !isNumber(
-      usage.output,
-    ) || !isNumber(cost.total)
+    !usage || !isNumber(usage.input) || !isNumber(usage.cacheRead) || !isNumber(usage.output)
   ) return null
   return {
     cacheMiss: usage.input,
     cacheRead: usage.cacheRead,
     cacheWrite: isNumber(usage.cacheWrite) ? usage.cacheWrite : 0,
-    cost: cost.total,
     output: usage.output,
   }
 }
 
-export function formatTurnCost(value: number): string {
-  const digits = value < 0.01 ? 4 : 2
-  return `$${
-    new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+/** The decode speed the backend measured for a reply, when it observed one. */
+export function decodeTokensPerSecond(message: JsonObject): number | undefined {
+  const speed = message.decodeTokensPerSecond
+  return isNumber(speed) && speed > 0 ? speed : undefined
+}
+
+export function formatDecodeSpeed(value: number): string {
+  return `${
+    new Intl.NumberFormat(navigator.language, {
+      maximumFractionDigits: value < 100 ? 1 : 0,
+    })
       .format(value)
-  }`
+  } tok/s`
+}
+
+/** When a reply finished: its start plus the request duration Pi recorded, else its start. */
+export function replyTime(message: JsonObject): Date | null {
+  if (!isNumber(message.timestamp)) return null
+  const time = new Date(
+    message.timestamp + (isNumber(message.durationMs) ? message.durationMs : 0),
+  )
+  return Number.isNaN(time.getTime()) ? null : time
 }
 
 export function formatTokens(value: number): string {

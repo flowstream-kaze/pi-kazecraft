@@ -5,18 +5,11 @@ import {
   buildSessionAnalysisPrompt,
 } from '../src/features/session-analysis/session-analysis.ts'
 
-const usage = (
-  input: number,
-  output: number,
-  cacheRead: number,
-  cacheWrite: number,
-  cost: number,
-) => ({
+const usage = (input: number, output: number, cacheRead: number, cacheWrite: number) => ({
   input,
   output,
   cacheRead,
   cacheWrite,
-  cost: { total: cost },
 })
 
 test('reconstruit les requêtes multi-appels et calcule les statistiques par réponse assistant', () => {
@@ -30,7 +23,7 @@ test('reconstruit les requêtes multi-appels et calcule les statistiques par ré
         name: 'read',
         arguments: { path: 'src/App.tsx' },
       }],
-      usage: usage(100, 10, 1_000, 20, 0.01),
+      usage: usage(100, 10, 1_000, 20),
     },
     {
       role: 'toolResult',
@@ -42,19 +35,18 @@ test('reconstruit les requêtes multi-appels et calcule les statistiques par ré
     {
       role: 'assistant',
       content: [{ type: 'text', text: 'Première réponse.' }],
-      usage: usage(200, 20, 2_000, 30, 0.02),
+      usage: usage(200, 20, 2_000, 30),
     },
     { role: 'user', timestamp: 200, content: 'Continue.' },
     {
       role: 'assistant',
       content: [{ type: 'text', text: 'En cours.' }],
-      usage: usage(300, 30, 3_000, 40, 0.03),
+      usage: usage(300, 30, 3_000, 40),
     },
   ]
   const analysis = analyzeSession(
     messages,
     {
-      cost: 0.07,
       toolCalls: 1,
       tokens: { input: 600, output: 60, cacheRead: 6_000, cacheWrite: 90 },
       contextUsage: { percent: 42.5 },
@@ -65,55 +57,42 @@ test('reconstruit les requêtes multi-appels et calcule les statistiques par ré
 
   assert.equal(analysis.requests.length, 2)
   assert.deepEqual(
-    analysis.requests.map(({ cost, modelCallCount, complete }) => ({
-      cost,
-      modelCallCount,
-      complete,
-    })),
+    analysis.requests.map(({ modelCallCount, complete }) => ({ modelCallCount, complete })),
     [
-      { cost: 0.03, modelCallCount: 2, complete: true },
-      { cost: 0.03, modelCallCount: 1, complete: false },
+      { modelCallCount: 2, complete: true },
+      { modelCallCount: 1, complete: false },
     ],
   )
   assert.equal(analysis.requests[0]?.durationMs, 1_250)
   assert.equal(analysis.toolCalls[0]?.turnMessageIndex, 1)
-  assert.equal(analysis.averageTurnCost, 0.02)
-  assert.equal(analysis.medianTurnCost, 0.02)
   assert.equal(analysis.turnCount, 3)
   assert.equal(analysis.averageToolCallsPerTurn, 1 / 3)
   assert.deepEqual(analysis.turns, [
     {
       messageIndex: 1,
       number: 1,
-      cost: 0.01,
-      usage: { cacheMiss: 100, cacheRead: 1_000, cacheWrite: 20, cost: 0.01, output: 10 },
+      usage: { cacheMiss: 100, cacheRead: 1_000, cacheWrite: 20, output: 10 },
       toolCallCount: 1,
     },
     {
       messageIndex: 3,
       number: 2,
-      cost: 0.02,
-      usage: { cacheMiss: 200, cacheRead: 2_000, cacheWrite: 30, cost: 0.02, output: 20 },
+      usage: { cacheMiss: 200, cacheRead: 2_000, cacheWrite: 30, output: 20 },
       toolCallCount: 0,
     },
     {
       messageIndex: 5,
       number: 3,
-      cost: 0.03,
-      usage: { cacheMiss: 300, cacheRead: 3_000, cacheWrite: 40, cost: 0.03, output: 30 },
+      usage: { cacheMiss: 300, cacheRead: 3_000, cacheWrite: 40, output: 30 },
       toolCallCount: 0,
     },
   ])
-  assert.ok(Math.abs(analysis.unattributedCost - 0.01) < Number.EPSILON)
   assert.deepEqual(analysis.tokens, {
     cacheMiss: 600,
     cacheRead: 6_000,
     cacheWrite: 90,
-    cost: 0.07,
     output: 60,
   })
-  assert.equal(analysis.costAvailable, true)
-  assert.equal(analysis.attributionAvailable, true)
   assert.equal(analysis.tokensAvailable, true)
   assert.equal(analysis.contextPercent, 42.5)
 })
@@ -127,7 +106,7 @@ test('compte uniquement les erreurs explicites et déduplique la télémétrie l
         { type: 'toolCall', id: 'call_failed', name: 'bash', arguments: { command: 'false' } },
         { type: 'toolCall', id: 'call_text', name: 'read', arguments: { path: 'missing' } },
       ],
-      usage: usage(10, 5, 20, 0, 0.001),
+      usage: usage(10, 5, 20, 0),
     },
     {
       role: 'toolResult',
@@ -178,7 +157,7 @@ test('cumule les volumes et durées par type d’outil', () => {
         { type: 'toolCall', id: 'read_1', name: 'read', arguments: { path: 'a' } },
         { type: 'toolCall', id: 'read_2', name: 'read', arguments: { path: 'b' } },
       ],
-      usage: usage(10, 5, 20, 0, 0.001),
+      usage: usage(10, 5, 20, 0),
     },
     {
       role: 'toolResult',
@@ -217,8 +196,6 @@ test('rattache une exécution live orpheline à une requête navigable de secour
 
   assert.equal(analysis.requests[0]?.messageIndex, -1)
   assert.equal(analysis.requests[0]?.complete, false)
-  assert.equal(analysis.costAvailable, false)
-  assert.equal(analysis.attributionAvailable, false)
   assert.equal(analysis.turnCount, 0)
   assert.equal(analysis.averageToolCallsPerTurn, 0)
   assert.equal(analysis.tokensAvailable, false)
@@ -232,7 +209,7 @@ test('prépare un prompt borné sans transmettre les sorties des outils', () => 
       {
         role: 'assistant',
         content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'a' } }],
-        usage: usage(100, 4, 900, 20, 0.02),
+        usage: usage(100, 4, 900, 20),
       },
       {
         role: 'toolResult',
@@ -244,7 +221,7 @@ test('prépare un prompt borné sans transmettre les sorties des outils', () => 
       {
         role: 'assistant',
         content: [{ type: 'text', text: 'Réponse finale.' }],
-        usage: usage(50, 2, 450, 10, 0.04),
+        usage: usage(50, 2, 450, 10),
       },
     ],
     null,
@@ -255,14 +232,14 @@ test('prépare un prompt borné sans transmettre les sorties des outils', () => 
 
   assert.ok(prompt.length < 4_000)
   assert.match(prompt, /"cacheReadPercentOfInput":88\.2/)
-  assert.match(prompt, /"topTurnPercentOfVisibleTurnCost":66\.7/)
-  assert.match(prompt, /"costliestTurns":\[\{"turn":2,"cost":0\.04/)
+  assert.match(prompt, /"topTurnPercentOfVisibleTokens":66\.7/)
+  assert.match(prompt, /"heaviestTurns":\[\{"turn":1,"tokens":1024/)
   assert.match(prompt, /"turn":1,"name":"read"/)
   assert.match(prompt, /"tools":\["read"\]/)
   assert.match(prompt, /"observedFailurePercent":100/)
-  assert.match(prompt, /\*\*Turns clés\*\*/)
+  assert.match(prompt, /\*\*Key turns\*\*/)
   assert.match(prompt, /"failed":true/)
-  assert.doesNotMatch(prompt, /costlyRequests|topRequest/)
+  assert.doesNotMatch(prompt, /cost/i)
   assert.doesNotMatch(prompt, /Inspecte la session/)
   assert.doesNotMatch(prompt, /secret tool output/)
 })

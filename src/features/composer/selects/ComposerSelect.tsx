@@ -1,10 +1,13 @@
 import * as Select from '@radix-ui/react-select'
 import { memo, type RefObject } from 'react'
 
+type ComposerSelectTone = 'agent' | 'behavior' | 'command' | 'model' | 'thinking' | 'voice'
+
 /** Generic Radix-based select dropdown shared by all composer toolbar controls. */
 export const ComposerSelect = memo(function ComposerSelect(
   {
     ariaLabel,
+    heading,
     disabled,
     onToggleFavorite,
     onOpenChange,
@@ -16,14 +19,14 @@ export const ComposerSelect = memo(function ComposerSelect(
     placeholder,
     tone,
     triggerRef,
-    loading,
     value,
   }: {
     ariaLabel: string
+    heading?: string
     disabled?: boolean
     onToggleFavorite?: (value: string) => void
     onValueChange: (value: string) => void
-    options: {
+    options: readonly {
       description?: string
       favorite?: boolean
       kind?: 'action'
@@ -31,9 +34,8 @@ export const ComposerSelect = memo(function ComposerSelect(
       value: string
     }[]
     placeholder?: string
-    tone: 'agent' | 'behavior' | 'command' | 'improve' | 'model' | 'prompt' | 'thinking'
+    tone: ComposerSelectTone
     value: string
-    loading?: boolean
     open?: boolean
     onOpenChange?: (open: boolean) => void
     onOptionPointerMove?: (value: string) => void
@@ -51,10 +53,13 @@ export const ComposerSelect = memo(function ComposerSelect(
       onValueChange={onValueChange}
       value={value}
     >
-      <Select.Trigger aria-label={ariaLabel} className={`composer-select ${tone}`} ref={triggerRef}>
-        {loading
-          ? <span aria-hidden='true' className='composer-select-spinner' />
-          : <ComposerSelectIcon tone={tone} />}
+      <Select.Trigger
+        aria-label={ariaLabel}
+        title={heading ? ariaLabel : undefined}
+        className={`composer-select ${tone}`}
+        ref={triggerRef}
+      >
+        <ComposerSelectIcon tone={tone} />
         <Select.Value placeholder={placeholder}>{selectedLabel}</Select.Value>
       </Select.Trigger>
       <Select.Portal>
@@ -64,6 +69,7 @@ export const ComposerSelect = memo(function ComposerSelect(
           sideOffset={7}
         >
           <Select.Viewport onPointerLeave={onOptionsPointerLeave}>
+            {heading && <div className='composer-select-heading'>{heading}</div>}
             {options.map((option) => (
               <Select.Item
                 className={`composer-select-option${option.kind === 'action' ? ' action' : ''}`}
@@ -109,16 +115,12 @@ export const ComposerSelect = memo(function ComposerSelect(
 })
 
 /** Uses consistent SVG pictograms independent of a font or emoji set. */
-function ComposerSelectIcon(
-  { tone }: {
-    tone: 'agent' | 'behavior' | 'command' | 'improve' | 'model' | 'prompt' | 'thinking'
-  },
-) {
-  if (tone === 'model')
+function ComposerSelectIcon({ tone }: { tone: ComposerSelectTone }) {
+  if (tone === 'voice')
     return (
       <svg aria-hidden='true' className='composer-select-icon' viewBox='0 0 16 16'>
         <path
-          d='m2.5 5 5.5-2.5L13.5 5 8 7.5 2.5 5Zm0 3L8 10.5 13.5 8M2.5 11 8 13.5l5.5-2.5'
+          d='M2.5 6v4h2.5l3.5 3V3L5 6H2.5ZM11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4'
           fill='none'
           stroke='currentColor'
           strokeLinejoin='round'
@@ -126,14 +128,13 @@ function ComposerSelectIcon(
         />
       </svg>
     )
-  if (tone === 'prompt')
+  if (tone === 'model')
     return (
       <svg aria-hidden='true' className='composer-select-icon' viewBox='0 0 16 16'>
         <path
-          d='M3 2.5h10v11H3zM5.2 5.5h5.6M5.2 8h5.6M5.2 10.5h3.2'
+          d='m2.5 5 5.5-2.5L13.5 5 8 7.5 2.5 5Zm0 3L8 10.5 13.5 8M2.5 11 8 13.5l5.5-2.5'
           fill='none'
           stroke='currentColor'
-          strokeLinecap='round'
           strokeLinejoin='round'
           strokeWidth='1.4'
         />

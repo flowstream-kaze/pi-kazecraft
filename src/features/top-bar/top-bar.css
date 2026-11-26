@@ -1,0 +1,152 @@
+/* Heads the open conversation: its identity on the left, controls on the right. */
+.session-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px 6px 18px;
+  background: var(--surface);
+}
+/* The collapsed sidebar leaves a floating button in the top-left corner; keep the title clear of it. */
+.app-shell.workspace-sidebar-collapsed .session-top-bar {
+  padding-left: 60px;
+}
+.session-top-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font: 11px ui-monospace, monospace;
+}
+.session-top-bar-info strong {
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--ink);
+  font: 700 16px "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-top-bar-end {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+.session-top-bar-compacting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning-strong);
+  font: 11px ui-monospace, monospace;
+  white-space: nowrap;
+}
+.session-top-bar-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--warning-strong);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+/* Toggles the "Your messages" list; matches the sidebar expand button beside it. */
+.session-top-bar-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+.session-top-bar-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+.session-top-bar-button:hover:not(:disabled),
+.session-top-bar-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.session-top-bar-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.session-top-bar-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.session-top-bar-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Brings the hidden tools sidebar back; floats in the corner when no conversation is open. */
+.right-sidebar-expand {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.right-sidebar-expand.floating {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+}
+.right-sidebar-expand:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.right-sidebar-expand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.right-sidebar-expand:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* The manager notice floats over the chat; keep it below the bar. */
+.workspace.has-top-bar > .manager-runtime-control {
+  top: 56px;
+}
+
+@media (max-width: 480px) {
+  .session-top-bar {
+    padding-left: 12px;
+  }
+  .session-top-bar-info > span:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-top-bar-spinner {
+    animation: none;
+  }
+  .right-sidebar-expand,
+  .session-top-bar-button {
+    transition: none;
+  }
+}

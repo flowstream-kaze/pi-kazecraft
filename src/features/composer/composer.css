@@ -1,6 +1,9 @@
+/* Same width as the message column above it (see --thread-inline in conversation.css). */
 .composer {
   position: relative;
-  margin: 0 auto 16px;
+  width: auto;
+  margin: 0 calc(var(--thread-inline) + var(--thread-scrollbar)) 16px
+    var(--thread-inline);
   overflow: visible;
   border-radius: 14px;
   transition: border-color 180ms ease-out, box-shadow 180ms ease-out;
@@ -19,6 +22,93 @@
   gap: 8px;
   overflow-x: auto;
   padding: 12px 16px 0;
+}
+/* Attached documents: one chip per file, saved in the session folder until the message is sent. */
+.composer-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px 0;
+}
+.composer-document {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 4px 0 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 12px;
+}
+.composer-document > svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+.composer-document > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-document > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.composer-document > button:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.composer-document.uploading {
+  padding-right: 10px;
+  color: var(--muted);
+}
+/* The attach button sits left of the model picker and matches its height. */
+.composer-attach {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    border-color 180ms ease-out,
+    background 180ms ease-out,
+    color 180ms ease-out;
+}
+.composer-attach svg {
+  width: 15px;
+  height: 15px;
+}
+.composer-attach:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+.composer-attach:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.composer-attach:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .composer-image {
   position: relative;
@@ -73,292 +163,16 @@
   padding: 18px 18px 16px;
   background: transparent;
   color: var(--ink);
-  line-height: 1.55;
+  font-size: var(--font-size-composer, 16px);
+  line-height: 1.5;
 }
 .composer textarea::placeholder {
   color: var(--muted);
-}
-.composer.previewing-prompt textarea {
-  background: color-mix(in srgb, var(--accent-soft) 48%, transparent);
-  box-shadow: inset 3px 0 var(--accent);
-}
-.prompt-save-dialog {
-  width: min(420px, calc(100% - 32px));
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 0;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-.prompt-save-dialog::backdrop {
-  background: color-mix(in srgb, var(--ink) 22%, transparent);
-}
-.prompt-save-dialog > div {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-}
-.prompt-save-dialog header {
-  min-width: 0;
-  margin-bottom: 6px;
-}
-.prompt-save-dialog header span {
-  color: var(--accent-hover);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.prompt-save-dialog h2 {
-  margin: 3px 0 2px;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-}
-.prompt-save-dialog p,
-.prompt-save-dialog small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-.prompt-save-dialog p {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, monospace;
-}
-.prompt-save-dialog label {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.prompt-save-dialog input {
-  width: 100%;
-  height: 36px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  padding: 0 10px;
-  outline: 0;
-  background: var(--canvas);
-  color: var(--ink);
-  font: 13px ui-monospace, monospace;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
-}
-.prompt-save-dialog input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.prompt-save-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  margin-top: 10px;
-}
-.prompt-save-actions button {
-  height: 32px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  padding: 0 12px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 700;
-  transition:
-    border-color 180ms ease,
-    background 180ms ease,
-    transform 180ms ease;
-}
-.prompt-save-actions button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.prompt-save-actions button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.prompt-save-actions button:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.prompt-save-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-  transform: none;
-}
-.prompt-save-actions button.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--surface);
-}
-.prompt-save-actions button.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.prompt-suggestion {
-  border-top: 1px solid var(--line);
-  padding: 12px;
-  background: color-mix(in srgb, var(--secondary-soft) 45%, var(--surface));
-  animation: prompt-suggestion-in 180ms ease-out both;
-}
-@keyframes prompt-suggestion-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .prompt-suggestion {
-    animation: none;
-  }
-}
-.prompt-comparison {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.prompt-comparison > div {
-  min-width: 0;
-  padding: 2px 4px;
-}
-.prompt-comparison > div + div {
-  border-left: 1px solid var(--line);
-  padding-left: 16px;
-}
-.prompt-comparison strong {
-  color: var(--subtle);
-  font-size: 10px;
-  font-weight: 700;
-}
-.prompt-comparison p {
-  max-height: 150px;
-  margin: 5px 0 0;
-  overflow: auto;
-  color: var(--ink);
-  font: 12px/1.5 ui-monospace, monospace;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.prompt-suggestion-meta {
-  display: flex;
-  justify-content: flex-start;
-  gap: 12px;
-  margin-top: 8px;
-  color: var(--muted);
-  font: 10px ui-monospace, monospace;
-}
-.prompt-suggestion-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 9px;
-}
-.prompt-suggestion-actions button {
-  height: 28px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  padding: 0 10px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 650;
-}
-.prompt-suggestion-actions button:hover {
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--line-strong));
-}
-.prompt-suggestion-actions button:focus-visible {
-  outline: 0;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.prompt-suggestion-actions button.accept {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--surface);
 }
 .composer-footer {
   border-top: 1px solid var(--line);
   border-radius: 0 0 13px 13px;
   background: var(--surface-raised);
-}
-.composer-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  min-width: 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  padding: 6px 12px 7px;
-}
-.composer-session, .composer-stats {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  color: var(--muted);
-  font: 10px ui-monospace, monospace;
-}
-.composer-session strong {
-  overflow: hidden;
-  color: var(--ink);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.composer-session > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.composer-stats {
-  flex: 0 0 auto;
-  gap: 12px;
-}
-.composer-stats span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.composer-stats b {
-  color: var(--subtle);
-  font: 650 9px ui-sans-serif, system-ui, sans-serif;
-}
-.composer-stats small {
-  color: currentColor;
-  font: 10px ui-monospace, monospace;
-}
-.composer-stats progress {
-  width: 48px;
-  height: 4px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 999px;
-  background: var(--line);
-  accent-color: currentColor;
-}
-.composer-stats progress::-webkit-progress-bar {
-  border-radius: inherit;
-  background: var(--line);
-}
-.composer-stats progress::-webkit-progress-value {
-  border-radius: inherit;
-  background: currentColor;
-}
-.composer-stats progress::-moz-progress-bar {
-  border-radius: inherit;
-  background: currentColor;
-}
-.context-warning {
-  color: var(--warning);
-}
-.context-warning-strong {
-  color: var(--warning-strong);
-}
-.context-danger {
-  color: var(--danger);
 }
 .composer-actions {
   display: flex;
@@ -404,34 +218,84 @@
     color 180ms ease-out,
     box-shadow 180ms ease-out;
 }
-.composer-select:hover {
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--line-strong));
-  background: var(--surface-raised);
-}
-.composer-select.agent:hover,
-.composer-select.agent[data-state="open"] {
+/* Every toolbar chip follows the theme's primary accent, so the row reads as one set in any theme;
+   colour beyond the accent is kept for status (the Context chip's warnings). */
+.composer-select:hover,
+.composer-select[data-state="open"] {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--line-strong));
   background: var(--accent-soft);
-}
-.composer-select.model:hover,
-.composer-select.model[data-state="open"] {
-  border-color: color-mix(in srgb, var(--secondary) 38%, var(--line-strong));
-  background: var(--secondary-soft);
-}
-.composer-select.thinking:hover,
-.composer-select.thinking[data-state="open"] {
-  border-color: color-mix(in srgb, var(--warning) 38%, var(--line-strong));
-  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
-}
-.composer-select.improve:hover,
-.composer-select.improve[data-state="open"] {
-  border-color: color-mix(in srgb, var(--secondary) 38%, var(--line-strong));
-  background: var(--secondary-soft);
 }
 .composer-select:focus-visible {
   outline: 0;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+/* Context usage: shaped like the selects, with a background that fills like a gauge. */
+.context-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: default;
+  transition: border-color 180ms ease-out, color 180ms ease-out;
+  --context-tone: var(--accent);
+}
+.context-chip.warning {
+  --context-tone: var(--warning);
+}
+.context-chip.warning-strong {
+  --context-tone: var(--warning-strong);
+}
+.context-chip.danger {
+  --context-tone: var(--danger);
+}
+.context-chip-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--context-tone) 14%, var(--surface));
+  transition: width 400ms ease-out, background 180ms ease-out;
+}
+.context-chip > :not(.context-chip-fill) {
+  position: relative;
+}
+.context-chip-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--context-tone);
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+.context-chip-value {
+  font: 11px ui-monospace, monospace;
+}
+.context-chip:is(.warning, .warning-strong, .danger) {
+  border-color: color-mix(in srgb, var(--context-tone) 38%, var(--line-strong));
+  color: color-mix(in srgb, var(--context-tone) 75%, var(--ink));
+}
+.context-chip:hover {
+  border-color: color-mix(in srgb, var(--context-tone) 42%, var(--line-strong));
+}
+.context-chip:focus-visible {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .context-chip,
+  .context-chip-fill {
+    transition: none;
+  }
 }
 .composer-toggle {
   display: inline-flex;
@@ -496,44 +360,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.composer-select.model .composer-select-icon {
-  color: var(--secondary);
-}
-.composer-select.thinking .composer-select-icon {
-  color: var(--warning);
-}
-.composer-select.agent .composer-select-icon {
+.composer-select .composer-select-icon {
   color: var(--accent);
 }
 .composer-select.command .composer-select-icon {
   color: color-mix(in srgb, var(--accent) 60%, var(--ink));
-}
-.composer-select.behavior .composer-select-icon {
-  color: var(--secondary);
-}
-.composer-select.improve .composer-select-icon {
-  color: var(--secondary);
-}
-.composer-select.prompt .composer-select-icon {
-  color: var(--accent);
-}
-.composer-select.improve .composer-select-icon::before {
-  content: "❇";
-  line-height: 14px;
-}
-.composer-select-spinner {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid var(--line-strong);
-  border-top-color: var(--secondary);
-  border-radius: 50%;
-  animation: spin 800ms linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-select-spinner {
-    animation: none;
-  }
 }
 .composer-select-content {
   z-index: 40;
@@ -541,26 +372,11 @@
   max-width: min(340px, calc(100vw - 24px));
   max-height: min(320px, var(--radix-select-content-available-height));
   overflow: hidden;
-  border: 1px solid var(--line-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line-strong));
   border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   animation: select-in 160ms ease-out;
-}
-.composer-select-content.model {
-  border-color: color-mix(in srgb, var(--secondary) 38%, var(--line-strong));
-}
-.composer-select-content.thinking {
-  border-color: color-mix(in srgb, var(--warning) 38%, var(--line-strong));
-}
-.composer-select-content.agent {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--line-strong));
-}
-.composer-select-content.improve {
-  border-color: color-mix(in srgb, var(--secondary) 38%, var(--line-strong));
-}
-.composer-select-content.prompt {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--line-strong));
 }
 /* Radix hides the viewport scrollbar and the content keeps its overflow clipped for
    the rounded corners, so the viewport owns the scrolling: it inherits the content
@@ -650,9 +466,6 @@
 .composer-select-option.action[data-highlighted] {
   background: var(--accent-soft);
 }
-.composer-select-content.improve .composer-select-option[data-highlighted] {
-  background: var(--secondary-soft);
-}
 .composer-select-option[data-state="checked"] {
   background: var(--accent-soft);
   color: var(--accent-hover);
@@ -704,28 +517,6 @@
   width: 15px;
   height: 15px;
   fill: currentColor;
-}
-.composer-compacting {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--warning-strong);
-  font: 10px ui-monospace, monospace;
-  white-space: nowrap;
-}
-.composer-compacting-spinner {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid var(--line-strong);
-  border-top-color: var(--warning-strong);
-  border-radius: 50%;
-  animation: spin 800ms linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-compacting-spinner {
-    animation: none;
-  }
 }
 .icon-button.send {
   width: 36px;
@@ -829,4 +620,14 @@
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.composer-select-heading {
+  padding: 5px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .composer-select.voice > span {
+    display: none;
+  }
 }

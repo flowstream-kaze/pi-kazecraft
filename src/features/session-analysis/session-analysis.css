@@ -83,18 +83,6 @@
   margin: 0;
   font-family: ui-monospace, monospace;
 }
-.analysis-note {
-  margin: 0;
-  border-block: 1px solid var(--line);
-  padding: 10px 14px;
-  background: var(--surface-raised);
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
-.analysis-note strong {
-  color: var(--ink);
-}
 .analysis-interpretation {
   border-bottom: 1px solid var(--line);
   padding: 14px;
@@ -268,24 +256,21 @@
   height: 2px;
   background: currentcolor;
 }
-.turn-cost-chart-frame, .token-chart-frame {
+.token-chart-frame {
   display: flex;
   min-width: 0;
 }
-.turn-cost-chart-scroll, .token-chart-scroll {
+.token-chart-scroll {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 0 1px;
 }
-.turn-cost-chart, .token-chart {
+.token-chart {
   display: block;
   min-width: 0;
   height: 178px;
-}
-.turn-cost-chart {
-  color: var(--accent);
 }
 .chart-y-axis {
   position: relative;
@@ -304,9 +289,6 @@
   stroke: var(--line);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
-}
-.chart-area {
-  fill: var(--accent-soft);
 }
 .chart-line {
   fill: none;
@@ -330,7 +312,7 @@
 .chart-point {
   cursor: pointer;
 }
-.chart-point-hit, .chart-column-hit {
+.chart-column-hit {
   fill: transparent;
   stroke: transparent;
   stroke-width: 2;
@@ -350,7 +332,6 @@
 .chart-point:focus {
   outline: none;
 }
-.chart-point:focus-visible .chart-point-hit,
 .chart-point:focus-visible .chart-column-hit {
   stroke: var(--accent);
 }
@@ -366,13 +347,6 @@
 .chart-tooltip text {
   fill: var(--ink);
   font: 9px ui-monospace, monospace;
-}
-.chart-tooltip-cost {
-  font-weight: 700;
-}
-.chart-tooltip-tools {
-  fill: var(--muted);
-  font-size: 8px;
 }
 .chart-tooltip-turn {
   font-weight: 700;

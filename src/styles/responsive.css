@@ -82,15 +82,18 @@
   .right-sidebar-resize-handle {
     display: none;
   }
+  :root {
+    --thread-inline: 20px;
+  }
   .conversation {
-    padding: 28px 20px;
+    padding-block: 28px;
   }
   .plan-panel {
     /* Stay aligned with the message column and keep equal gaps above and below. */
     margin-inline: 20px;
     margin-bottom: 28px;
   }
-  .composer, .ask-user-question {
+  .ask-user-question {
     width: calc(100% - 32px);
   }
 }
@@ -119,11 +122,18 @@
   .sidebar.collapsed .sidebar-rail {
     width: auto;
   }
-  .brand {
+  .sidebar-header {
     grid-row: 1;
     grid-column: 1;
     min-width: 0;
-    margin-bottom: 0;
+  }
+  .sidebar-toolbar {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: center;
+  }
+  .sidebar-selection-bar {
+    grid-column: 1 / -1;
   }
   .workspace-sections {
     grid-row: 2;
@@ -139,14 +149,6 @@
     min-width: 220px;
     max-height: 100%;
     overflow-y: auto;
-  }
-  .new-session {
-    grid-row: 1;
-    grid-column: 2;
-    align-self: center;
-    width: auto;
-    margin-bottom: 0;
-    padding-inline: 13px;
   }
   .workspace {
     flex: 1;
@@ -170,17 +172,17 @@
     border-radius: 10px;
     font-size: 22px;
   }
-  .brand small {
+  .sidebar-tool-primary span {
     display: none;
-  }
-  .new-session {
-    font-size: 12px;
   }
   .new-session-browse {
     flex-basis: 100%;
   }
+  :root {
+    --thread-inline: 12px;
+  }
   .conversation {
-    padding: 20px 12px;
+    padding-block: 20px;
   }
   .plan-panel {
     margin-inline: 12px;
@@ -189,7 +191,7 @@
   .message.assistant {
     padding-inline: 2px;
   }
-  .composer, .ask-user-question {
+  .ask-user-question {
     width: calc(100% - 20px);
   }
   .composer {
@@ -204,18 +206,6 @@
   }
   .ask-user-question-actions {
     padding: 10px 12px;
-  }
-  .composer-info {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 7px;
-  }
-  .composer-session {
-    width: 100%;
-  }
-  .composer-stats {
-    width: 100%;
-    justify-content: space-between;
   }
   .composer-tools {
     flex: 1;
@@ -232,14 +222,5 @@
   }
   .composer-select {
     max-width: 160px;
-  }
-  .prompt-comparison {
-    grid-template-columns: 1fr;
-  }
-  .prompt-comparison > div + div {
-    border-top: 1px solid var(--line);
-    border-left: 0;
-    padding-top: 10px;
-    padding-left: 4px;
   }
 }

@@ -26,7 +26,7 @@
   "scripts": {
     "dev": "concurrently --kill-others --kill-timeout 3000 --names manager,backend,frontend npm:dev:manager npm:dev:backend npm:dev:frontend",
     "start": "npm run build && concurrently --kill-others --kill-timeout 3000 --names manager,backend npm:start:manager npm:start:backend",
-    "dev:frontend": "vite --host 127.0.0.1",
+    "dev:frontend": "vite --host 127.0.0.1 --open",
     "dev:backend": "node --watch server/backend.ts",
     "dev:manager": "node server/manager-supervisor.ts",
     "start:backend": "node server/backend.ts",
@@ -43,13 +43,23 @@
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.3.3",
+    "@xmldom/xmldom": "0.9.12",
     "diff": "^8.0.4",
+    "docx": "9.15.3",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.2",
+    "mammoth": "1.13.0",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm": "3.1.0",
+    "micromark-extension-gfm": "3.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "react-material-icon-theme": "^1.2.0",
     "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
+    "unpdf": "2.1.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

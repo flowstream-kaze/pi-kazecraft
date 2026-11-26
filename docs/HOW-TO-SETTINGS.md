@@ -8,10 +8,14 @@
 SettingsPanel (modal container, tab state)
   ├── Tab bar (role="tablist")
   │     ├── Tab button: Color themes
+  │     ├── Tab button: Text size
+  │     ├── Tab button: Sidebar
   │     ├── Tab button: Terminal
   │     └── Tab button: Shortcuts
   └── Tab panels (role="tabpanel", one visible at a time)
         ├── ThemeSettings (section component)
+        ├── TextSizeSettings (section component)
+        ├── SidebarSettings (section component)
         ├── TerminalSettings (section component)
         └── ShortcutsSettings (section component)
 ```
@@ -23,6 +27,8 @@ SettingsPanel (modal container, tab state)
 | Tab ID | Label | Component | Props from `SettingsPanelProps` |
 |---|---|---|---|
 | `themes` | Color themes | `ThemeSettings` | `themes`, `activeThemeId`, `onSelectTheme`, `onDuplicateTheme`, `onRenameTheme`, `onUpdateThemeColor`, `onDeleteTheme`, `onResetTheme` |
+| `text` | Text size | `TextSizeSettings` | `fontSizes`, `onFontSizesChange` |
+| `sidebar` | Sidebar | `SidebarSettings` | `bannerImage`, `onBannerChange` |
 | `terminal` | Terminal | `TerminalSettings` | `terminalCommand`, `onTerminalCommandChange` |
 | `shortcuts` | Shortcuts | `ShortcutsSettings` | `definitions`, `shortcuts`, `onChange`, `onReset` |
 
@@ -41,7 +47,7 @@ export type SettingsTabId = 'themes' | 'terminal' | 'shortcuts' | 'my-feature'
 Add an entry to the `settingsTabs` array in the same file:
 
 ```ts
-export const settingsTabs: SettingsTabDefinition[] = [
+const settingsTabs: SettingsTabDefinition[] = [
   { id: 'themes', label: 'Color themes' },
   { id: 'terminal', label: 'Terminal' },
   { id: 'shortcuts', label: 'Shortcuts' },

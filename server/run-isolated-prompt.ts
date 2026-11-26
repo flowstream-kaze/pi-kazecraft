@@ -3,9 +3,8 @@ import { copyFile, mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ISOLATED_AGENT_DIR, PiProcess } from './pi-process.ts'
-import { assistantText, cheapestAvailableModel } from './prompt-improvement.ts'
+import { assistantText, firstAvailableModel } from './prompt-improvement.ts'
 import type { JsonObject } from '../shared/types.ts'
-import { isObject } from '../shared/is-object.ts'
 
 /** Lazy-init promise so concurrent isolated prompts share a single directory setup. */
 let isolatedDirReady: Promise<void> | undefined
@@ -46,7 +45,7 @@ export interface RunIsolatedPromptOptions {
   systemPrompt?: string
   /** Thinking level: 'off', 'low', 'medium', or 'high' (defaults to 'off'). */
   thinkingLevel?: string
-  /** Model to use. When omitted, the cheapest available model is auto-selected. */
+  /** Model to use. When omitted, the first model Pi lists is used. */
   model?: { provider: string; modelId: string }
   /** Extension paths to load. Omit to disable all extensions. */
   extensions?: string[]
@@ -59,13 +58,11 @@ export interface RunIsolatedPromptOptions {
 /** Result of running a prompt in an isolated Pi process. */
 export interface IsolatedPromptResult {
   text: string
-  /** USD cost of the isolated execution, if Pi exposes it. */
-  cost?: number
 }
 
 /**
  * Runs a prompt in an isolated, disposable Pi process and returns the
- * assistant's text response with optional cost metadata.
+ * assistant's text response.
  *
  * The process is terminated immediately after the response is extracted,
  * regardless of success or failure.
@@ -92,9 +89,9 @@ export async function runIsolatedPrompt(
       })
     } else {
       const available = await pi.request({ type: 'get_available_models' })
-      const cheapest = cheapestAvailableModel(available)
-      if (!cheapest) throw new Error('No model is available to run the prompt')
-      await pi.request({ type: 'set_model', provider: cheapest.provider, modelId: cheapest.id })
+      const fallback = firstAvailableModel(available)
+      if (!fallback) throw new Error('No model is available to run the prompt')
+      await pi.request({ type: 'set_model', provider: fallback.provider, modelId: fallback.id })
     }
 
     const settled = waitForPiEvent(pi, 'agent_settled')
@@ -105,16 +102,7 @@ export async function runIsolatedPrompt(
 
     const text = assistantText(await pi.request({ type: 'get_messages' }))
     if (!text) throw new Error('The model returned no text')
-
-    let cost: number | undefined
-    try {
-      const stats = await pi.request({ type: 'get_session_stats' })
-      if (isObject(stats.data) && typeof stats.data.cost === 'number') cost = stats.data.cost
-    } catch {
-      // Stats unavailable on this Pi version; cost stays undefined.
-    }
-
-    return { text, cost }
+    return { text }
   } finally {
     await pi.terminate()
   }

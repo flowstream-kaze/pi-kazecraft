@@ -15,23 +15,25 @@ Pure protocol, reconciliation, and display rules stay separate:
 Presentation follows the same ownership boundaries:
 
 - `Conversation.tsx` assembles the thread and owns scrolling and navigation;
-- `UserMessageRail.tsx` renders the gutter navigator for user prompts;
-- `MessageCard.tsx` renders protocol messages and turn usage;
+- `MessageNavigator.tsx` renders the "Your messages" list of user prompts;
+- `MessageCard.tsx` renders protocol messages and their always-visible footers (`MessageFooter.tsx`): under each finished reply, copy (reply text without its thinking), read aloud, the decode speed (see [decode speed](/server/features/decode-speed/README.md)), and a relative time whose tooltip gives the turn and exact moment; under each user message, its relative time, rewind, edit, and copy;
 - `ActivityIndicator.tsx` renders the current Pi activity;
 - `Markdown.tsx` owns Markdown and front matter rendering;
 - `ToolCallCard.tsx` owns tool state, actions, and expansion;
 - `ToolCallOutput.tsx` renders file previews and expanded output;
 - `ToolCallEditDiff.tsx` renders edit diffs.
 
-Styles are split by the same surfaces: `conversation.css` for the shell, viewport, and empty/loading states, `messages.css`, `tool-call.css`, `conversation-actions.css`, `user-message-rail.css`, `activity.css`, and `conversation-motion.css`. Composer slash-command styles remain in `composer.css`.
+Styles are split by the same surfaces: `conversation.css` for the shell, viewport, and empty/loading states, `messages.css`, `tool-call.css`, `conversation-actions.css`, `message-navigator.css`, `activity.css`, and `conversation-motion.css`. Composer slash-command styles remain in `composer.css`.
 
-Conversation views are simplified (messages only), semi-detailed (tool headers only; expanded calls show their full output with the existing scroll limits), or detailed (calls with their previews).
+Conversation views are simplified (messages only), semi-detailed (tool headers only; expanded calls show their full output with the existing scroll limits), or detailed (calls with their previews). They are defined in `conversation-view.ts` and chosen from the [right sidebar](/src/features/right-sidebar/README.md) rail or the palette command.
 
-## User message rail
+Relative times ("2 minutes ago", "yesterday") come from `relative-time.ts`, whose `useClock` shares one 30-second timer across every footer. Read aloud sends cleaned passages to the local `POST /api/read-aloud` endpoint. A CPU worker reads them with the Paradee voice selected in the composer. Heart is the default. Playback keeps its starting voice through the last passage. Clicking again stops playback; reading another reply switches to it. The backend looks for a sibling `Paradee` directory (or `PARADEE_HOME`) containing the Python environment in `venv` and the preloaded Hugging Face files in `cache`.
 
-`UserMessageRail.tsx` renders marks in the thread gutter, one per user prompt. Hovering previews the prompt text and its send time through the shared `Tooltip`; clicking scrolls the thread back to that message and highlights it.
+## Your messages
 
-`user-message-anchors.ts` derives the marks from the reconciled thread entries, so prompts that only carry attachments are labelled instead of dropped. History prompts are addressed by their rendered index (`[data-message-index]`); prompts Pi has not reported yet stay addressable by streamed key (`[data-message-key]`). Both paths reuse the navigation that session-analysis targets already use, which mounts missing history, suspends auto-scroll, and resumes it only when the user returns to the bottom.
+The top bar's speech-bubbles button toggles `MessageNavigator.tsx`, a panel floating in the thread's top-right corner. It lists every user prompt with its number, a two-line preview, and its send time, and opens scrolled to the latest. Choosing a prompt scrolls the thread back to it and highlights it; the panel stays open so the user can hop between prompts. A click outside it, its close button, or Escape while focus is inside it hides it, so it never keeps covering the right-aligned prompts. `App.tsx` owns the open state.
+
+`user-message-anchors.ts` derives the entries from the reconciled thread entries, so prompts that only carry attachments are labelled instead of dropped. History prompts are addressed by their rendered index (`[data-message-index]`); prompts Pi has not reported yet stay addressable by streamed key (`[data-message-key]`). Both paths reuse the navigation that session-analysis targets already use, which mounts missing history, suspends auto-scroll, and resumes it only when the user returns to the bottom.
 
 The rail renders as soon as the thread holds a user prompt, and stays hidden below 900px, where the message column no longer leaves a gutter.
 
@@ -49,9 +51,8 @@ Messages and tool calls expose contextual actions through explicit composition r
 
 Action components are implementations, not the extension contract. `CopyButton.tsx` uses the browser Clipboard API, while `OpenFileButton.tsx` delegates to the local backend so the operating system can launch the file. Both report failures through `onError` and expose accessible labels through the shared `Tooltip` component.
 
-- Text messages expose one copy action when `visibleText()` returns content.
-- Forkable user messages expose an action that starts a Pi fork before that prompt, refreshes the
-  active branch, and places Pi's returned prompt text in the composer for editing.
+- Text messages expose one copy action when `visibleText()` returns content. User messages and finished replies show it in their footer; a reply without a footer (streaming or interrupted) keeps it on hover.
+- Forkable user messages expose two footer actions built on a Pi fork before that prompt (`ForkButton.tsx`): **Edit** places Pi's returned prompt text in the composer, and **Rewind** sends it again at once. Rewind resends text only; images attached to the original prompt are not included.
 - Tool calls always expose their serialized input (`↘`) and expose raw output (`↗`) once a result exists, including error results.
 - Successful `read`, `write`, and `edit` calls expose an action that resolves relative paths from the session working directory and opens the resulting file, including absolute targets outside it.
 - Pending calls have no output or file action. Directional markers distinguish copy actions without visible button text.

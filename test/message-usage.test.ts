@@ -1,30 +1,32 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  formatTurnCost,
+  decodeTokensPerSecond,
   messageUsage,
+  replyTime,
   turnUsageByMessage,
 } from '../src/features/conversation/message-usage.ts'
 
-test('extracts per-response cost and token counters from Pi usage', () => {
+test('extracts per-response token counters from Pi usage', () => {
   const usage = messageUsage({
     role: 'assistant',
-    usage: {
-      input: 12_345,
-      output: 678,
-      cacheRead: 9_876,
-      cost: { total: 0.00105 },
-    },
+    usage: { input: 12_345, output: 678, cacheRead: 9_876, cost: { total: 0.00105 } },
   })
 
-  assert.deepEqual(usage, {
-    cacheMiss: 12_345,
-    cacheRead: 9_876,
-    cacheWrite: 0,
-    cost: 0.00105,
-    output: 678,
-  })
-  assert.equal(formatTurnCost(usage?.cost ?? 0), '$0.0011')
+  assert.deepEqual(usage, { cacheMiss: 12_345, cacheRead: 9_876, cacheWrite: 0, output: 678 })
+})
+
+test('reads the measured decode speed and ignores missing or invalid values', () => {
+  assert.equal(decodeTokensPerSecond({ decodeTokensPerSecond: 70.5 }), 70.5)
+  assert.equal(decodeTokensPerSecond({}), undefined)
+  assert.equal(decodeTokensPerSecond({ decodeTokensPerSecond: 0 }), undefined)
+  assert.equal(decodeTokensPerSecond({ decodeTokensPerSecond: '70' }), undefined)
+})
+
+test('dates a reply at its end when Pi recorded the request duration', () => {
+  assert.equal(replyTime({ timestamp: 1_000, durationMs: 500 })?.getTime(), 1_500)
+  assert.equal(replyTime({ timestamp: 1_000 })?.getTime(), 1_000)
+  assert.equal(replyTime({}), null)
 })
 
 test('keeps usage separate for each agentic turn', () => {
@@ -37,20 +39,20 @@ test('keeps usage separate for each agentic turn', () => {
         { type: 'toolCall', id: 'call_1', name: 'read' },
         { type: 'toolCall', id: 'call_2', name: 'grep' },
       ],
-      usage: { input: 100, output: 10, cacheRead: 1_000, cost: { total: 0.001 } },
+      usage: { input: 100, output: 10, cacheRead: 1_000 },
     },
     { role: 'toolResult', toolCallId: 'call_1' },
     { role: 'toolResult', toolCallId: 'call_2' },
     {
       role: 'assistant',
       content: [{ type: 'text', text: 'C’est fait.' }],
-      usage: { input: 200, output: 20, cacheRead: 2_000, cost: { total: 0.002 } },
+      usage: { input: 200, output: 20, cacheRead: 2_000 },
     },
   ])
 
   assert.deepEqual([...usages], [
-    [1, { cacheMiss: 100, cacheRead: 1_000, cacheWrite: 0, cost: 0.001, output: 10 }],
-    [4, { cacheMiss: 200, cacheRead: 2_000, cacheWrite: 0, cost: 0.002, output: 20 }],
+    [1, { cacheMiss: 100, cacheRead: 1_000, cacheWrite: 0, output: 10 }],
+    [4, { cacheMiss: 200, cacheRead: 2_000, cacheWrite: 0, output: 20 }],
   ])
 })
 
@@ -74,7 +76,7 @@ test('defers usage for messages whose tool calls are not yet resolved', () => {
         { type: 'toolCall', id: 'call_1', name: 'read' },
         { type: 'toolCall', id: 'call_2', name: 'grep' },
       ],
-      usage: { input: 100, output: 10, cacheRead: 50, cost: { total: 0.001 } },
+      usage: { input: 100, output: 10, cacheRead: 50 },
     },
     { role: 'toolResult', toolCallId: 'call_1' },
     { role: 'toolResult', toolCallId: 'call_2' },
@@ -93,7 +95,7 @@ test('defers usage for messages whose tool calls are not yet resolved', () => {
   // Both resolved from history: usage appears.
   assert.deepEqual(
     [...turnUsageByMessage(messages, new Set(['call_1', 'call_2']))],
-    [[1, { cacheMiss: 100, cacheRead: 50, cacheWrite: 0, cost: 0.001, output: 10 }]],
+    [[1, { cacheMiss: 100, cacheRead: 50, cacheWrite: 0, output: 10 }]],
   )
 })
 
@@ -103,13 +105,13 @@ test('shows usage immediately for assistant responses without tool calls', () =>
     {
       role: 'assistant',
       content: [{ type: 'text', text: 'Salut !' }],
-      usage: { input: 10, output: 5, cacheRead: 0, cost: { total: 0.0001 } },
+      usage: { input: 10, output: 5, cacheRead: 0 },
     },
   ]
 
   assert.deepEqual(
     [...turnUsageByMessage(messages, new Set())],
-    [[1, { cacheMiss: 10, cacheRead: 0, cacheWrite: 0, cost: 0.0001, output: 5 }]],
+    [[1, { cacheMiss: 10, cacheRead: 0, cacheWrite: 0, output: 5 }]],
   )
 })
 
@@ -118,7 +120,7 @@ test('returns all usages when resolvedCallIds is not provided', () => {
     {
       role: 'assistant',
       content: [{ type: 'toolCall', id: 'pending', name: 'read' }],
-      usage: { input: 100, output: 10, cacheRead: 1, cost: { total: 0.001 } },
+      usage: { input: 100, output: 10, cacheRead: 1 },
     },
   ]
 

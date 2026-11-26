@@ -451,7 +451,7 @@ async function requestPi(
 }
 
 /** Rewrites a draft in a disposable, tool-free Pi process without touching the active session. */
-async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string; cost?: number }> {
+async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string }> {
   if (
     typeof request.sessionId !== 'string' || typeof request.prompt !== 'string' || !request
       .prompt
@@ -478,9 +478,28 @@ async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string;
     cwd: session.summary.cwd,
     prompt: `<user_prompt>\n${request.prompt.trim()}\n</user_prompt>`,
     systemPrompt: `${systemPrompt}\n\n${directionBlock}${projectMap}`,
+    model: await sessionModel(session),
     includeContextFiles: false,
   })
-  return { prompt: result.text, cost: result.cost }
+  return { prompt: result.text }
+}
+
+/**
+ * Reads the model the session currently uses, so an isolated prompt runs on it instead of
+ * making a local model server switch to another model. Undefined when Pi does not report one.
+ */
+async function sessionModel(
+  session: ManagedSession,
+): Promise<{ provider: string; modelId: string } | undefined> {
+  try {
+    const state = await requestPi(session, { type: 'get_state' }, 5_000)
+    const model = isObject(state.data) && isObject(state.data.model) ? state.data.model : undefined
+    return model && typeof model.provider === 'string' && typeof model.id === 'string'
+      ? { provider: model.provider, modelId: model.id }
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** Runs a prompt in an isolated, disposable Pi process with caller-controlled configuration. */
@@ -502,7 +521,7 @@ async function runPrompt(request: ManagerRequest): Promise<{ text: string }> {
     prompt: request.prompt.trim(),
     systemPrompt: typeof request.systemPrompt === 'string' ? request.systemPrompt : undefined,
     thinkingLevel: typeof request.thinkingLevel === 'string' ? request.thinkingLevel : undefined,
-    model: isModelOption(request.model) ? request.model : undefined,
+    model: isModelOption(request.model) ? request.model : await sessionModel(session),
     extensions: Array.isArray(request.extensions)
       ? request.extensions.filter((e): e is string => typeof e === 'string')
       : undefined,

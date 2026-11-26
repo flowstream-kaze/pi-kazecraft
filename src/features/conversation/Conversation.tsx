@@ -21,8 +21,8 @@ import { toolCallsInMessage, toolResultInMessage, type ToolExecution } from './t
 import type { SessionAnalysisTarget } from '../session-analysis/session-analysis.ts'
 import { ActivityIndicator } from './ActivityIndicator.tsx'
 import { Markdown } from './Markdown.tsx'
-import { MessageCard, TurnUsage } from './MessageCard.tsx'
-import { UserMessageRail } from './UserMessageRail.tsx'
+import { MessageCard, ResponseBar } from './MessageCard.tsx'
+import { MessageNavigator } from './MessageNavigator.tsx'
 import { isVisibleConversationMessage } from './message-display.ts'
 import { ToolCallCard } from './ToolCallCard.tsx'
 import { userMessageAnchors, type UserMessageAnchor } from './user-message-anchors.ts'
@@ -48,6 +48,8 @@ export function Conversation(
     liveMessages,
     conversationView,
     navigationRequest,
+    messageNavigatorOpen,
+    onMessageNavigatorClose,
     pendingSteering,
     repositoryRoot,
     scrollToBottomRequest,
@@ -56,6 +58,7 @@ export function Conversation(
     workingDirectory,
     onError,
     onFork,
+    onRewind,
   }: {
     activity: Activity | null
     agentName?: string
@@ -63,6 +66,9 @@ export function Conversation(
     liveMessages: LiveMessage[]
     conversationView: 'simple' | 'semi-detailed' | 'detailed'
     navigationRequest?: { id: number; target: SessionAnalysisTarget }
+    /** Whether the "Your messages" list, toggled from the top bar, is shown. */
+    messageNavigatorOpen: boolean
+    onMessageNavigatorClose: () => void
     pendingSteering: string[]
     repositoryRoot?: string | null
     scrollToBottomRequest: number
@@ -71,6 +77,7 @@ export function Conversation(
     workingDirectory: string
     onError: (cause: unknown) => void
     onFork: (entryId: string) => Promise<boolean>
+    onRewind: (entryId: string) => Promise<boolean>
   },
 ) {
   const showToolCalls = conversationView !== 'simple'
@@ -375,7 +382,13 @@ export function Conversation(
                   key={entry.key}
                 >
                   {isVisibleConversationMessage(message) && (
-                    <MessageCard message={message} onError={onError} onFork={onFork} />
+                    <MessageCard
+                      copyInResponseBar={usage !== undefined}
+                      message={message}
+                      onError={onError}
+                      onFork={onFork}
+                      onRewind={onRewind}
+                    />
                   )}
                   {calls.map((call) => {
                     const execution = executionsByCallId.get(call.id)
@@ -403,7 +416,13 @@ export function Conversation(
                       />
                     )
                   })}
-                  {usage && <TurnUsage turnNumber={turnNumbers.get(index)} usage={usage} />}
+                  {usage && (
+                    <ResponseBar
+                      message={message}
+                      onError={onError}
+                      turnNumber={turnNumbers.get(index)}
+                    />
+                  )}
                 </div>
               )
             }
@@ -430,6 +449,7 @@ export function Conversation(
                           message={part.message}
                           onError={onError}
                           onFork={onFork}
+                          onRewind={onRewind}
                         />
                       )
                       : null
@@ -540,7 +560,13 @@ export function Conversation(
           </button>
         </div>
       </section>
-      <UserMessageRail anchors={railAnchors} onSelect={navigateToAnchor} />
+      {messageNavigatorOpen && (
+        <MessageNavigator
+          anchors={railAnchors}
+          onClose={onMessageNavigatorClose}
+          onSelect={navigateToAnchor}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,5 @@
 .tool-call {
   position: relative;
-  max-width: 760px;
   margin: 0 2px 18px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));

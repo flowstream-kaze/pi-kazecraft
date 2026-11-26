@@ -90,18 +90,12 @@ async function listEntries(
   }
 }
 
-/** Selects the cheapest usable model with the same deterministic ordering as pi-auto-title. */
-export function cheapestAvailableModel(
+/** Falls back to the first usable model, in the order Pi lists them, when no model was chosen. */
+export function firstAvailableModel(
   response: JsonObject,
 ): { id: string; provider: string } | undefined {
   if (!isObject(response.data) || !Array.isArray(response.data.models)) return undefined
-  const models = response.data.models.filter(isModel)
-  models.sort((left, right) =>
-    left.cost.output - right.cost.output
-    || left.cost.input - right.cost.input
-    || Number(left.reasoning) - Number(right.reasoning)
-  )
-  return models[0]
+  return response.data.models.find(isModel)
 }
 
 /** Returns the last assistant text from a completed disposable Pi session. */
@@ -123,18 +117,6 @@ export function assistantText(response: JsonObject): string | undefined {
   return undefined
 }
 
-function isModel(
-  value: unknown,
-): value is {
-  id: string
-  provider: string
-  reasoning: boolean
-  cost: { input: number; output: number }
-} {
-  if (
-    !isObject(value) || typeof value.id !== 'string' || typeof value.provider !== 'string'
-    || !isObject(value.cost)
-  ) return false
-  return typeof value.cost.input === 'number' && typeof value.cost.output === 'number'
-    && typeof value.reasoning === 'boolean'
+function isModel(value: unknown): value is { id: string; provider: string } {
+  return isObject(value) && typeof value.id === 'string' && typeof value.provider === 'string'
 }

@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
+import { PanelIcon } from '../../components/PanelIcon.tsx'
 import { Tooltip } from '../../components/Tooltip.tsx'
 import type {
   GitFileDiff,
@@ -23,7 +24,9 @@ import type {
 } from '../session-analysis/session-analysis.ts'
 import { TodoWidget } from '../todo/TodoWidget.tsx'
 import { loadTodos } from '../todo/todo-cache.ts'
+import type { ConversationView } from '../conversation/conversation-view.ts'
 import { maxRightSidebarWidth, minRightSidebarWidth, type RightWidget } from './right-sidebar.ts'
+import { ViewModeRailButton } from './ViewModeRailButton.tsx'
 import { WidgetLayout } from './WidgetLayout.tsx'
 
 export interface RailAction {
@@ -42,7 +45,10 @@ export function RightSidebar({
   analysisAvailable,
   compactingSessionIds,
   completedSessionIds,
+  conversationView,
   onAnalysisNavigate,
+  onCollapse,
+  onConversationViewChange,
   onResize,
   snapshot,
   width,
@@ -67,7 +73,12 @@ export function RightSidebar({
   analysisAvailable: boolean
   compactingSessionIds: ReadonlySet<string>
   completedSessionIds: ReadonlySet<string>
+  /** The conversation view, offered on the rail only while a conversation is shown. */
+  conversationView?: ConversationView
   onAnalysisNavigate: (target: SessionAnalysisTarget) => void
+  /** Hides the whole sidebar, rail included. */
+  onCollapse: () => void
+  onConversationViewChange: (view: ConversationView) => void
   onResize: (width: number) => void
   snapshot: GitSnapshot | null
   width: number
@@ -93,6 +104,7 @@ export function RightSidebar({
     if (activeWidget === 'todo') return
     let cancelled = false
     setTodoOpenCount(null)
+    if (!workspacePath) return
     void loadTodos(workspacePath)
       .then((todos) => {
         if (!cancelled) setTodoOpenCount(todos.filter((todo) => !todo.completed).length)
@@ -221,6 +233,21 @@ export function RightSidebar({
         </div>
       )}
       <div className='right-sidebar-rail'>
+        {/* First on the rail, level with the session top bar where the Show button sits when hidden. */}
+        <Tooltip label='Collapse tools sidebar'>
+          <button
+            aria-expanded={true}
+            aria-label='Collapse tools sidebar'
+            className='rail-tab rail-collapse'
+            onClick={onCollapse}
+            type='button'
+          >
+            <PanelIcon side='right' />
+          </button>
+        </Tooltip>
+        {conversationView && (
+          <ViewModeRailButton onChange={onConversationViewChange} view={conversationView} />
+        )}
         {analysisAvailable && (
           <Tooltip label='Session analysis'>
             <button

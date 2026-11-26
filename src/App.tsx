@@ -5,14 +5,12 @@ import {
   discardChanges,
   getGitFileDiff,
   getGitSnapshot,
-  improvePrompt,
   openExplorer,
   openTerminal,
   pushCommits,
   resetGitCommit,
   restartManager,
   revertGitCommit,
-  savePrompt,
   sendPiCommand,
   subscribeManagerEvents,
 } from './api.ts'
@@ -29,6 +27,10 @@ import { setTabAttention, tabUnwatched } from './features/notifications/tab-atte
 import { ToastStack, type Toast } from './features/notifications/ToastStack.tsx'
 import { sessionActivity, type PiConnection } from './features/conversation/activity.ts'
 import { Conversation } from './features/conversation/Conversation.tsx'
+import {
+  nextConversationView,
+  type ConversationView,
+} from './features/conversation/conversation-view.ts'
 import { useConversationRuntime } from './features/conversation/useConversationRuntime.ts'
 import { AskUserQuestionDialog, ExtensionDialog } from './features/dialogs/Dialogs.tsx'
 import {
@@ -43,7 +45,10 @@ import {
   readRightSidebarWidth,
   type RightWidget,
 } from './features/right-sidebar/right-sidebar.ts'
+import { PanelIcon } from './components/PanelIcon.tsx'
 import { RightSidebar } from './features/right-sidebar/RightSidebar.tsx'
+import { SessionTopBar } from './features/top-bar/SessionTopBar.tsx'
+import { Tooltip } from './components/Tooltip.tsx'
 import { NewSessionDialog } from './features/workspace/NewSessionDialog.tsx'
 import { useWorkspaceSessions } from './features/workspace/useWorkspaceSessions.ts'
 import { WorkspaceSidebar } from './features/workspace/WorkspaceSidebar.tsx'
@@ -62,7 +67,18 @@ import {
   shortcutFromEvent,
   type CommandId,
 } from './features/commands/command-registry.ts'
-import { SettingsPanel } from './features/settings/SettingsPanel.tsx'
+import {
+  applyFontSizes,
+  readFontSizes,
+  storeFontSizes,
+} from './features/settings/font-size-storage.ts'
+import { readSidebarBanner, storeSidebarBanner } from './features/workspace/sidebar-banner.ts'
+import { SettingsPanel, type SettingsTabId } from './features/settings/SettingsPanel.tsx'
+import {
+  describeSessionStats,
+  findModel,
+  type ParsedBuiltinCommand,
+} from './features/composer/builtin-commands.ts'
 import { ManagerRuntimeNotice } from './features/manager/ManagerRuntimeNotice.tsx'
 import {
   allThemes,
@@ -86,25 +102,9 @@ import {
 import './features/commands/commands.css'
 
 const emptyAgentOptions: string[] = []
-const conversationViewDetails = {
-  simple: { label: 'Simplified view', description: 'Messages only, without tool calls' },
-  'semi-detailed': {
-    label: 'Semi-detailed view',
-    description: 'Tool headers only; click one to expand it',
-  },
-  detailed: { label: 'Detailed view', description: 'Visible calls with expandable preview' },
-} as const
-type ConversationView = keyof typeof conversationViewDetails
-
 const gitRefreshDelayMs = 250
 const managerUnavailableMessage = 'Pi manager is unavailable'
 const managerUnavailableToastDelayMs = 1_000
-
-function nextConversationView(current: ConversationView): ConversationView {
-  if (current === 'simple') return 'semi-detailed'
-  if (current === 'semi-detailed') return 'detailed'
-  return 'simple'
-}
 /** Orchestrates workspace state, Pi events, and UI panels. */
 function App() {
   // Workspace and sessions
@@ -125,7 +125,10 @@ function App() {
       ? 'simple'
       : 'detailed'
   })
-  const conversationViewDetail = conversationViewDetails[conversationView]
+  const selectConversationView = useCallback((view: ConversationView) => {
+    setConversationView(view)
+    window.localStorage.setItem('pi-livecraft.conversation-view', view)
+  }, [])
 
   // Dialogs and notifications
   const [agentOptions, setAgentOptions] = useState<Record<string, string[]>>({})
@@ -158,12 +161,19 @@ function App() {
         .getItem('pi-livecraft.git-sidebar-width'),
     )
   )
+  const [rightSidebarHidden, setRightSidebarHidden] = useState(() =>
+    window.localStorage.getItem('pi-livecraft.right-sidebar-hidden') === 'true'
+  )
+  /** Whether the "Your messages" list, opened from the top bar, is shown. */
+  const [messageNavigatorOpen, setMessageNavigatorOpen] = useState(false)
+  const closeMessageNavigator = useCallback(() => setMessageNavigatorOpen(false), [])
 
   // Preferences and commands
   const [themePreferences, setThemePreferences] = useState(() => readThemePreferences())
   const activeTheme = useMemo(() => resolveActiveTheme(themePreferences), [themePreferences])
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId>('themes')
 
   // Transient UI requests and measurements
   type LoadingPhase = 'hidden' | 'entering' | 'visible' | 'exiting'
@@ -182,6 +192,12 @@ function App() {
   >()
   const [shortcuts, setShortcuts] = useState(() => readShortcuts())
   const [terminalCommand, setTerminalCommand] = useState(() => readTerminalCommand())
+  const [newSessionDialogMode, setNewSessionDialogMode] = useState<'session' | 'project'>(
+    'session',
+  )
+  const [sidebarBanner, setSidebarBanner] = useState(() => readSidebarBanner())
+  const [fontSizes, setFontSizes] = useState(() => readFontSizes())
+  useEffect(() => applyFontSizes(document.documentElement, fontSizes), [fontSizes])
 
   // Workspace and session synchronization
   const selectedIdRef = useRef(window.localStorage.getItem('pi-livecraft.selected-session') ?? '')
@@ -304,6 +320,7 @@ function App() {
   const {
     activatePreviousWorkspace,
     addPendingRequest,
+    addWorkspacePath,
     archiveManagedSession,
     closeManagedSession,
     collapsedWorkspacePaths,
@@ -318,6 +335,7 @@ function App() {
     newSessionDialogOpen,
     openSessionRow,
     refreshSessions,
+    reloadManagedSession,
     removePendingRequest,
     renameManagedSession,
     renameSession,
@@ -326,6 +344,7 @@ function App() {
     selectedId,
     sessions,
     setNewSessionDialogOpen,
+    setWorkspacesCollapsed,
     selectSession,
     toggleWorkspaceCollapsed,
     unarchiveSession,
@@ -338,6 +357,11 @@ function App() {
     onSessionsRefreshed: handleSessionsRefreshed,
     onWorkspaceSelected: handleWorkspaceSelected,
   })
+  // Only the sidebar's New project opens the dialog in project mode; every other way opens it
+  // as New session, so the mode resets whenever the dialog closes.
+  useEffect(() => {
+    if (!newSessionDialogOpen) setNewSessionDialogMode('session')
+  }, [newSessionDialogOpen])
   selectedIdRef.current = selectedId
 
   // Browser tab attention
@@ -425,10 +449,18 @@ function App() {
     setRightSidebarWidth(nextWidth)
   }, [])
 
+  /** Hides or shows the whole tools sidebar, rail included, and remembers the choice. */
+  const setRightSidebarHiddenPreference = useCallback((hidden: boolean) => {
+    window.localStorage.setItem('pi-livecraft.right-sidebar-hidden', String(hidden))
+    setRightSidebarHidden(hidden)
+  }, [])
+
   const openRightWidget = useCallback((widget: RightWidget) => {
     window.localStorage.setItem('pi-livecraft.right-sidebar-widget', widget)
     setActiveRightWidget(widget)
-  }, [])
+    // A widget opened from the palette or a shortcut brings a hidden sidebar back.
+    setRightSidebarHiddenPreference(false)
+  }, [setRightSidebarHiddenPreference])
 
   // Theme preferences
   const selectTheme = useCallback((id: string) => {
@@ -497,6 +529,11 @@ function App() {
       gitRefreshTimerRef.current = undefined
     }
     const version = ++gitRefreshVersionRef.current
+    // Before any workspace is opened there is no repository to ask about.
+    if (!cwd) {
+      setGitSnapshot(null)
+      return
+    }
     try {
       const nextSnapshot = await getGitSnapshot(cwd)
       if (version === gitRefreshVersionRef.current) setGitSnapshot(nextSnapshot)
@@ -789,26 +826,20 @@ function App() {
       snapshot.messages,
     ],
   )
+
+  /** Forks before a user message, then sends that message again from the restored point. */
+  const handleRewindConversation = useCallback(async (entryId: string): Promise<boolean> => {
+    const response = await sendPiCommand(selectedId, { type: 'fork', entryId })
+    const data = isObject(response.data) ? response.data : undefined
+    if (data?.cancelled === true || typeof data?.text !== 'string' || !data.text.trim())
+      return false
+    await Promise.all([refreshSnapshot(selectedId), refreshSessions()])
+    await handleComposerSend(data.text, [], 'followUp', false)
+    return true
+  }, [handleComposerSend, refreshSessions, refreshSnapshot, selectedId])
   const handleComposerAbort = useCallback(() => sendPiCommand(selectedId, { type: 'abort' }), [
     selectedId,
   ])
-  const handlePromptImprovement = useCallback(
-    (prompt: string, direction?: string) => improvePrompt(selectedId, prompt, direction),
-    [selectedId],
-  )
-  /** Persists the draft through Pi's prompt directories and confirms its scope to the user. */
-  const handleSavePrompt = useCallback(async (
-    scope: 'global' | 'project',
-    name: string,
-    content: string,
-  ) => {
-    const saved = await savePrompt(selectedSession?.cwd ?? workspacePath, scope, name, content)
-    showToast(
-      'notice',
-      `Prompt “${name}” saved ${scope === 'global' ? 'globally' : 'for this project'}.`,
-    )
-    return saved
-  }, [selectedSession?.cwd, showToast, workspacePath])
   const handleComposerSelectOpened = useCallback(() => setRequestedSelect(null), [])
   const analysisAvailable = selectedSession !== undefined
     && snapshotSessionId === selectedSession.id
@@ -860,6 +891,7 @@ function App() {
       return
     }
     if (id === 'open-settings') {
+      setSettingsInitialTab('themes')
       setSettingsOpen(true)
       return
     }
@@ -937,6 +969,151 @@ function App() {
     terminalCommand,
     workspacePath,
   ])
+
+  /**
+   * Runs one of Pi's built-in terminal commands typed in the chatbox. Pi accepts these only in its TUI, so
+   * each maps to the matching RPC command or to this app's own UI. Throwing puts the draft back.
+   */
+  const handleBuiltinCommand = useCallback(async (command: ParsedBuiltinCommand): Promise<void> => {
+    if (command.kind === 'terminal-only') {
+      showToast('notice', `/${command.name} only works in Pi's terminal. ${command.hint}`)
+      return
+    }
+    const { args, name } = command
+    const session = sessions.find((candidate) => candidate.id === selectedId)
+    switch (name) {
+      case 'model': {
+        if (!args) {
+          setRequestedSelect('model')
+          return
+        }
+        const model = findModel(
+          snapshot.models.flatMap((item) =>
+            typeof item.provider === 'string' && typeof item.id === 'string'
+              ? [{
+                id: item.id,
+                name: typeof item.name === 'string' ? item.name : undefined,
+                provider: item.provider,
+              }]
+              : []
+          ),
+          args,
+        )
+        if (!model)
+          throw new Error(`No single model matches “${args}”. Type /model to pick one.`)
+        await handleComposerCommand({
+          type: 'set_model',
+          provider: model.provider,
+          modelId: model.id,
+        })
+        showToast('notice', `Model set to ${model.name ?? model.id}.`)
+        return
+      }
+      case 'thinking': {
+        if (!args) {
+          setRequestedSelect('thinking')
+          return
+        }
+        await handleComposerCommand({ type: 'set_thinking_level', level: args.toLowerCase() })
+        showToast('notice', `Thinking set to ${args.toLowerCase()}.`)
+        return
+      }
+      case 'compact':
+        await handleComposerCommand(
+          args ? { type: 'compact', customInstructions: args } : { type: 'compact' },
+        )
+        return
+      case 'new':
+        setNewSessionDialogOpen(true)
+        return
+      case 'name':
+        if (!args) {
+          showToast('notice', `This session is called “${session?.name ?? 'New session'}”.`)
+          return
+        }
+        if (!session) throw new Error('No session is selected.')
+        await renameManagedSession(
+          {
+            cwd: session.cwd,
+            name: session.name,
+            sessionId: session.id,
+            sessionPath: session.sessionPath,
+          },
+          args,
+        )
+        showToast('notice', `Session renamed to “${args}”.`)
+        return
+      case 'session': {
+        const response = await sendPiCommand(selectedId, { type: 'get_session_stats' })
+        const stats = isObject(response.data) ? response.data : {}
+        showToast('notice', describeSessionStats(stats, session?.name ?? 'New session'))
+        return
+      }
+      case 'fork': {
+        const response = await sendPiCommand(selectedId, { type: 'get_fork_messages' })
+        const messages = isObject(response.data) && Array.isArray(response.data.messages)
+          ? response.data.messages.filter(isObject)
+          : []
+        const last = messages.at(-1)
+        if (!last || typeof last.entryId !== 'string') {
+          showToast('notice', 'There is no message to fork from yet.')
+          return
+        }
+        if (await handleForkConversation(last.entryId))
+          showToast('notice', 'Forked before your last message; it is back in the chatbox.')
+        return
+      }
+      case 'copy':
+        executeCommand('copy-last-response')
+        return
+      case 'export': {
+        if (args && !/\.html?$/i.test(args))
+          throw new Error('Only HTML export is available here; give a path ending in .html.')
+        const response = await sendPiCommand(
+          selectedId,
+          args ? { type: 'export_html', outputPath: args } : { type: 'export_html' },
+        )
+        const path = isObject(response.data) ? response.data.path : undefined
+        showToast('notice', typeof path === 'string' ? `Exported to ${path}` : 'Session exported.')
+        return
+      }
+      case 'reload': {
+        if (!session) throw new Error('No session is selected.')
+        if (session.status === 'running') throw new Error('Wait for Pi to finish before reloading.')
+        await reloadManagedSession(session.id)
+        showToast(
+          'notice',
+          'Pi restarted for this session; extensions, skills and prompts are reloaded.',
+        )
+        return
+      }
+      case 'settings':
+      case 'hotkeys':
+        setSettingsInitialTab(name === 'hotkeys' ? 'shortcuts' : 'themes')
+        setSettingsOpen(true)
+        return
+    }
+  }, [
+    executeCommand,
+    handleComposerCommand,
+    handleForkConversation,
+    reloadManagedSession,
+    renameManagedSession,
+    selectedId,
+    sessions,
+    setNewSessionDialogOpen,
+    showToast,
+    snapshot.models,
+  ])
+
+  /** Why the sidebar's Reload button cannot run /reload right now; undefined when it can. */
+  const reloadUnavailable = (() => {
+    const session = sessions.find((candidate) => candidate.id === selectedId)
+    if (!session || session.status === 'exited') return 'Open a session to reload Pi for it'
+    if (session.status === 'running') return 'Wait for Pi to finish before reloading'
+    if (!session.sessionPath) return 'This session has nothing saved to reload yet'
+    return undefined
+  })()
 
   const paletteCommands: PaletteCommand[] = useMemo(() => {
     const selectedIndex = selectedRowIndex
@@ -1053,11 +1230,49 @@ function App() {
   const rightPanelVisible = activeRightWidget === 'todo'
     || (activeRightWidget === 'analysis' && sessionAnalysis !== null)
     || (activeRightWidget === 'git' && gitSnapshot?.repository === true)
+  const conversationShown = selectedSession !== undefined
+    && (snapshotSessionId === selectedSession.id || loadingPhase === 'exiting')
+  const expandRightSidebarButton = rightSidebarHidden && (
+    <Tooltip label='Show tools sidebar'>
+      <button
+        aria-expanded={false}
+        aria-label='Show tools sidebar'
+        className={`right-sidebar-expand${conversationShown ? '' : ' floating'}`}
+        onClick={() => setRightSidebarHiddenPreference(false)}
+        type='button'
+      >
+        <PanelIcon side='right' />
+      </button>
+    </Tooltip>
+  )
+  const messageNavigatorLabel = messageNavigatorOpen ? 'Hide your messages' : 'Show your messages'
+  const messageNavigatorButton = (
+    <Tooltip label={messageNavigatorLabel}>
+      <button
+        aria-label={messageNavigatorLabel}
+        aria-pressed={messageNavigatorOpen}
+        className='session-top-bar-button'
+        data-message-navigator-toggle
+        onClick={() => setMessageNavigatorOpen((open) => !open)}
+        type='button'
+      >
+        <svg aria-hidden='true' viewBox='0 0 24 24'>
+          <path d='M4 5.5h11a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H9l-3.5 3v-3H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z' />
+          <path d='M20 9.5h.5a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H20v2.5L17 17.5h-4' />
+          <path d='M6 9h7M6 11.5h4.5' />
+        </svg>
+      </button>
+    </Tooltip>
+  )
 
   return (
     <div
       className={`app-shell ${workspaceSidebarCollapsed ? 'workspace-sidebar-collapsed ' : ''}${
-        rightPanelVisible ? 'right-sidebar-visible' : 'right-sidebar-collapsed'
+        rightSidebarHidden
+          ? ''
+          : rightPanelVisible
+          ? 'right-sidebar-visible'
+          : 'right-sidebar-collapsed'
       }`}
       style={{
         '--right-sidebar-width': `${rightSidebarWidth}px`,
@@ -1065,7 +1280,14 @@ function App() {
       } as CSSProperties}
     >
       <WorkspaceSidebar
+        bannerImage={sidebarBanner}
         collapsed={workspaceSidebarCollapsed}
+        onChangeBanner={() => {
+          setSettingsInitialTab('sidebar')
+          setSettingsOpen(true)
+        }}
+        onReload={() => handleBuiltinCommand({ kind: 'run', name: 'reload', args: '' })}
+        reloadUnavailable={reloadUnavailable}
         collapsedWorkspacePaths={collapsedWorkspacePaths}
         compactingSessionIds={compactingSessionIds}
         completedSessionIds={completedSessionIds}
@@ -1074,14 +1296,23 @@ function App() {
         sessions={sessions}
         selectedId={selectedId}
         width={workspaceSidebarWidth}
+        onAddWorkspace={addWorkspacePath}
         onArchiveSession={archiveManagedSession}
         onCloseSession={closeManagedSession}
         onDeleteSession={deleteManagedSession}
         onRenameWorkspace={renameWorkspace}
         onUnarchiveSession={unarchiveSession}
         onCreateInWorkspace={(path) => createSessionInWorkspace(path).then(() => undefined)}
-        onNewSession={() => setNewSessionDialogOpen(true)}
+        onNewProject={() => {
+          setNewSessionDialogMode('project')
+          setNewSessionDialogOpen(true)
+        }}
+        onNewSession={() => {
+          setNewSessionDialogMode('session')
+          setNewSessionDialogOpen(true)
+        }}
         onOpenSession={openSessionRow}
+        onSetWorkspacesCollapsed={setWorkspacesCollapsed}
         onError={(cause) => showToast('error', messageOf(cause))}
         onOpenSettings={() => setSettingsOpen(true)}
         onRenameSession={renameManagedSession}
@@ -1090,7 +1321,8 @@ function App() {
         onToggleCollapsed={toggleWorkspaceSidebar}
       />
 
-      <main className='workspace'>
+      <main className={`workspace${conversationShown ? ' has-top-bar' : ''}`}>
+        {!conversationShown && expandRightSidebarButton}
         <ManagerRuntimeNotice
           activeSession={sessions.some(({ status }) =>
             status === 'running' || status === 'starting'
@@ -1102,8 +1334,19 @@ function App() {
         {selectedSession
           ? (
             <>
-              {(snapshotSessionId === selectedSession.id || loadingPhase === 'exiting') && (
+              {conversationShown && (
                 <>
+                  <SessionTopBar
+                    actions={
+                      <>
+                        {messageNavigatorButton}
+                        {expandRightSidebarButton}
+                      </>
+                    }
+                    compacting={displayedActivity?.kind === 'compacting'}
+                    running={selectedSession.status === 'running'}
+                    session={selectedSession}
+                  />
                   <Conversation
                     activity={displayedActivity}
                     agentName={selectedSession.activeAgent}
@@ -1112,8 +1355,11 @@ function App() {
                     liveMessages={liveMessages}
                     messages={snapshot.messages}
                     navigationRequest={conversationNavigation}
+                    messageNavigatorOpen={messageNavigatorOpen}
+                    onMessageNavigatorClose={closeMessageNavigator}
                     onError={handleConversationError}
                     onFork={handleForkConversation}
+                    onRewind={handleRewindConversation}
                     pendingSteering={pendingSteering}
                     repositoryRoot={gitSnapshot?.root}
                     scrollToBottomRequest={scrollToBottomRequest}
@@ -1121,54 +1367,6 @@ function App() {
                     toolDurations={observedToolDurations}
                     toolExecutions={toolExecutions}
                   />
-                  <div className={`chat-detail-control ${conversationView}`}>
-                    <button
-                      aria-label={`${conversationViewDetail.label}. ${conversationViewDetail.description}. Hover or focus to choose another view.`}
-                      className={`chat-detail-toggle ${conversationView}`}
-                      onClick={() =>
-                        setConversationView((current) => {
-                          const next = nextConversationView(current)
-                          window.localStorage.setItem('pi-livecraft.conversation-view', next)
-                          return next
-                        })}
-                      type='button'
-                    >
-                      <span aria-hidden='true' className='chat-detail-toggle-icon'>⌘</span>
-                      <span className='chat-detail-toggle-copy'>
-                        <strong>{conversationViewDetail.label}</strong>
-                        <small>{conversationViewDetail.description}</small>
-                      </span>
-                    </button>
-                    <div
-                      aria-label='Conversation view options'
-                      className='chat-detail-view-menu'
-                      role='group'
-                    >
-                      {(['simple', 'semi-detailed', 'detailed'] as const).map((view) => {
-                        const detail = conversationViewDetails[view]
-                        return (
-                          <button
-                            aria-pressed={view === conversationView}
-                            className={`chat-detail-option ${view}${
-                              view === conversationView ? ' selected' : ''
-                            }`}
-                            key={view}
-                            onClick={() => {
-                              setConversationView(view)
-                              window.localStorage.setItem('pi-livecraft.conversation-view', view)
-                            }}
-                            type='button'
-                          >
-                            <span aria-hidden='true' className='chat-detail-option-mark' />
-                            <span className='chat-detail-option-copy'>
-                              <strong>{detail.label}</strong>
-                              <small>{detail.description}</small>
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
                   <div className='composer-area'>
                     {/* A finished plan stops tracking as soon as Pi settles its turn. */}
                     {plan && (selectedSession.status === 'running' || !plan.complete) && (
@@ -1205,6 +1403,7 @@ function App() {
                       onAgentChange={handleComposerAgentChange}
                       onRequestAgentOptions={() => fetchAgentOptions(selectedSession.id)}
                       onCommand={handleComposerCommand}
+                      onBuiltinCommand={handleBuiltinCommand}
                       commands={snapshot.commands}
                       agentLoading={snapshotSessionId !== selectedSession.id}
                       focusRequest={focusComposerRequest}
@@ -1215,11 +1414,8 @@ function App() {
                       showAgentSelector={snapshotSessionId !== selectedSession.id
                         || snapshot.commands.some((command) => command.name === 'agent')}
                       running={selectedSession.status === 'running'}
-                      compacting={displayedActivity?.kind === 'compacting'}
                       onSend={handleComposerSend}
                       onAbort={handleComposerAbort}
-                      onImprovePrompt={handlePromptImprovement}
-                      onSavePrompt={handleSavePrompt}
                       onError={handleConversationError}
                       requestedSelect={requestedSelect}
                       onSelectOpened={handleComposerSelectOpened}
@@ -1264,13 +1460,13 @@ function App() {
               <section className='welcome'>
                 <span className='brand-mark large'>π</span>
                 <h1>Control Pi from your browser</h1>
-                <p>Open a workspace folder to reach your models, agents, tools, and commands.</p>
+                <p>Start a session or open one from your projects.</p>
                 <button
                   className='welcome-action'
                   onClick={() => setNewSessionDialogOpen(true)}
                   type='button'
                 >
-                  ＋ New workspace
+                  ＋ New session
                 </button>
               </section>
               <ToastStack onDismiss={dismissToast} standalone toasts={visibleToasts} />
@@ -1278,76 +1474,91 @@ function App() {
           )}
       </main>
 
-      <RightSidebar
-        activeSessionId={selectedId}
-        activeWidget={activeRightWidget}
-        analysis={sessionAnalysis}
-        analysisAvailable={analysisAvailable}
-        compactingSessionIds={compactingSessionIds}
-        completedSessionIds={completedSessionIds}
-        onAnalysisNavigate={navigateToAnalysisTarget}
-        onResize={updateRightSidebarWidth}
-        snapshot={gitSnapshot?.repository ? gitSnapshot : null}
-        sessions={sessions}
-        width={rightSidebarWidth}
-        workspacePath={workspacePath}
-        railActions={railActions}
-        onCommit={async (message) => {
-          await commitChanges(workspacePath, message)
-        }}
-        onDiscard={async (path) => {
-          await discardChanges(workspacePath, path)
-        }}
-        onPush={() => pushCommits(workspacePath)}
-        onFileSelect={(path, commitHash) => getGitFileDiff(workspacePath, path, commitHash)}
-        onRefresh={() => refreshGit(workspacePath, true)}
-        onReset={async (hash) => {
-          return await resetGitCommit(workspacePath, hash)
-        }}
-        onRevert={async (hash) => {
-          return await revertGitCommit(workspacePath, hash)
-        }}
-        onTodoNavigateSession={(link) => {
-          const active = sessions.find((session) => session.status !== 'exited'
-            && (session.id === link.id || session.sessionPath === link.sessionPath)
-          )
-          if (active) {
-            selectSession(active.id)
-          } else {
-            const savedRow = groups.flatMap((group) => group.sessions).find((session) =>
-              session.sessionPath === link.sessionPath
+      {!rightSidebarHidden && (
+        <RightSidebar
+          activeSessionId={selectedId}
+          conversationView={conversationShown ? conversationView : undefined}
+          onCollapse={() => setRightSidebarHiddenPreference(true)}
+          onConversationViewChange={selectConversationView}
+          activeWidget={activeRightWidget}
+          analysis={sessionAnalysis}
+          analysisAvailable={analysisAvailable}
+          compactingSessionIds={compactingSessionIds}
+          completedSessionIds={completedSessionIds}
+          onAnalysisNavigate={navigateToAnalysisTarget}
+          onResize={updateRightSidebarWidth}
+          snapshot={gitSnapshot?.repository ? gitSnapshot : null}
+          sessions={sessions}
+          width={rightSidebarWidth}
+          workspacePath={workspacePath}
+          railActions={railActions}
+          onCommit={async (message) => {
+            await commitChanges(workspacePath, message)
+          }}
+          onDiscard={async (path) => {
+            await discardChanges(workspacePath, path)
+          }}
+          onPush={() => pushCommits(workspacePath)}
+          onFileSelect={(path, commitHash) => getGitFileDiff(workspacePath, path, commitHash)}
+          onRefresh={() => refreshGit(workspacePath, true)}
+          onReset={async (hash) => {
+            return await resetGitCommit(workspacePath, hash)
+          }}
+          onRevert={async (hash) => {
+            return await revertGitCommit(workspacePath, hash)
+          }}
+          onTodoNavigateSession={(link) => {
+            const active = sessions.find((session) =>
+              session.status !== 'exited'
+              && (session.id === link.id || session.sessionPath === link.sessionPath)
             )
-            void openSessionRow(
-              savedRow ?? {
-                cwd: link.cwd || workspacePath,
-                id: link.id,
-                name: link.name,
-                sessionPath: link.sessionPath,
-                updatedAt: Date.now(),
-              },
-            )
-              .catch((cause) => showToast('error', messageOf(cause)))
-          }
-        }}
-        onTodoSendPrompt={(message) =>
-          createSessionInWorkspace(workspacePath, { initialMessage: message })}
-        onTodoStartSession={(message) =>
-          createSessionInWorkspace(workspacePath, { draftMessage: message })}
-        onWidgetSelect={(widget) =>
-          setActiveRightWidget((current) => {
-            const next = current === widget ? null : widget
-            window.localStorage.setItem('pi-livecraft.right-sidebar-widget', next ?? 'none')
-            return next
-          })}
-      />
+            if (active) {
+              selectSession(active.id)
+            } else {
+              const savedRow = groups.flatMap((group) => group.sessions).find((session) =>
+                session.sessionPath === link.sessionPath
+              )
+              void openSessionRow(
+                savedRow ?? {
+                  cwd: link.cwd || workspacePath,
+                  id: link.id,
+                  name: link.name,
+                  sessionPath: link.sessionPath,
+                  updatedAt: Date.now(),
+                },
+              )
+                .catch((cause) => showToast('error', messageOf(cause)))
+            }
+          }}
+          onTodoSendPrompt={(message) =>
+            createSessionInWorkspace(workspacePath, { initialMessage: message })}
+          onTodoStartSession={(message) =>
+            createSessionInWorkspace(workspacePath, { draftMessage: message })}
+          onWidgetSelect={(widget) =>
+            setActiveRightWidget((current) => {
+              const next = current === widget ? null : widget
+              window.localStorage.setItem('pi-livecraft.right-sidebar-widget', next ?? 'none')
+              return next
+            })}
+        />
+      )}
 
       {newSessionDialogOpen && (
         <NewSessionDialog
+          mode={newSessionDialogMode}
+          projects={groups}
           onClose={() => setNewSessionDialogOpen(false)}
           onError={(cause) => showToast('error', messageOf(cause))}
-          onCreate={async (path) => {
+          onCreate={async (path, name) => {
+            const session = await createSessionInWorkspace(path, {
+              projectName: path ? undefined : name || 'General',
+              reportErrorInDialog: true,
+              revealSection: true,
+            })
+            if (!session)
+              throw new Error('Session could not be started. Check the project name and folder.')
+            if (path && name) renameWorkspace(session.cwd, name)
             setNewSessionDialogOpen(false)
-            await createSessionInWorkspace(path)
           }}
         />
       )}
@@ -1381,9 +1592,20 @@ function App() {
       )}
       {settingsOpen && (
         <SettingsPanel
+          initialTab={settingsInitialTab}
           definitions={commandDefinitions}
           shortcuts={shortcuts}
           terminalCommand={terminalCommand}
+          fontSizes={fontSizes}
+          bannerImage={sidebarBanner}
+          onBannerChange={(image) => {
+            storeSidebarBanner(image)
+            setSidebarBanner(image)
+          }}
+          onFontSizesChange={(sizes) => {
+            setFontSizes(sizes)
+            storeFontSizes(sizes)
+          }}
           themes={allThemes(themePreferences)}
           activeThemeId={activeTheme.id}
           onChange={(id, shortcut) => {
