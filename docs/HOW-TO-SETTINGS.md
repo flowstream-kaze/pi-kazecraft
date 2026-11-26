@@ -11,10 +11,11 @@ SettingsPanel (modal container, tab state, search text)
   │     ├── Side list (nav)
   │     │     ├── Search box: filters sections by label and keywords; Enter opens the first match
   │     │     └── Section buttons (role="tablist", vertical), each with an icon
-  │     │           Color themes · Text size · Sidebar · Notifications · Terminal · Shortcuts
+  │     │           Models · Memory · Color themes · Text size · Banners · Notifications · Terminal ·
+  │     │           Shortcuts · Help & FAQ
   │     └── Content: the section title, then one panel (role="tabpanel")
-  │           ThemeSettings · TextSizeSettings · SidebarSettings · NotificationSettings ·
-  │           TerminalSettings · ShortcutsSettings
+  │           ModelSettings · MemorySettings · ThemeSettings · TextSizeSettings · SidebarSettings ·
+  │           NotificationSettings · TerminalSettings · ShortcutsSettings · FaqSettings
   └── Footer: Reset shortcuts and Done
 ```
 
@@ -29,12 +30,34 @@ controls on the right), as the Notifications section does.
 
 | Tab ID | Label | Component | Props from `SettingsPanelProps` |
 |---|---|---|---|
+| `models` | Models | `ModelSettings` (`ModelSettings.tsx`) | `currentModel`, `onUseModelInSession` |
+| `memory` | Memory | `MemorySettings` (`MemorySettings.tsx`) | none |
 | `themes` | Color themes | `ThemeSettings` | `themes`, `activeThemeId`, `onSelectTheme`, `onDuplicateTheme`, `onRenameTheme`, `onUpdateThemeColor`, `onDeleteTheme`, `onResetTheme` |
 | `text` | Text size | `TextSizeSettings` | `fontSizes`, `onFontSizesChange` |
-| `sidebar` | Sidebar | `SidebarSettings` | `bannerImage`, `onBannerChange` |
+| `sidebar` | Banners | `SidebarSettings` | `bannerImage`, `onBannerChange` |
 | `notifications` | Notifications | `NotificationSettings` | `notificationSounds`, `onNotificationSoundsChange` |
 | `terminal` | Terminal | `TerminalSettings` | `terminalCommand`, `onTerminalCommandChange` |
 | `shortcuts` | Shortcuts | `ShortcutsSettings` | `definitions`, `shortcuts`, `onChange`, `onReset` |
+| `faq` | Help & FAQ | `FaqSettings` (`FaqSettings.tsx`) | none |
+
+**Models** lists every model in Pi's `~/.pi/agent/models.json` (`GET /api/models`, from
+`server/features/model-catalog/`), with whether llama-swap has it loaded (polled every 2 s), the
+context and longest reply, and the load time learned by the model-switch notice. Each card has
+**Use in this chat** (sends `set_model` to the open session and starts loading it), **Load now**
+(llama-swap preload) and **Make default** (`POST /api/models/default`, which rewrites only
+`defaultProvider` and `defaultModel` in Pi's `settings.json` and refuses a model that
+`models.json` does not list). What each model is good at, with speeds measured on this PC, is in
+`model-profiles.ts`, keyed by `provider/id`; a model without a profile still shows its basics.
+Coverage: `test/model-catalog.test.ts`.
+
+**Memory** edits the agent's long-term memory (`~/.pi/agent/MEMORY.md`, `GET`/`PUT /api/memory`)
+and lists its skills (`~/.pi/agent/skills/*/SKILL.md`) with Open and Show in folder. Save checks
+that Pi did not change the file while it was open and refuses to overwrite such a change. See
+`pi-extensions/README.md` for how the memory reaches every session.
+
+**Help & FAQ** is static text in `FaqSettings.tsx`: how the stack works, how to change kazecraft by
+asking Pi in chat, where things are kept, and what to check when something goes wrong. Keep it in
+step with the stack when the models, ports or folders change.
 
 ## Add a new tab
 

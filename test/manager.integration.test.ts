@@ -708,6 +708,7 @@ const expectedExtensions = ${
       join(process.cwd(), 'pi-extensions/plan.ts'),
       join(process.cwd(), 'pi-extensions/read-document.ts'),
       join(process.cwd(), 'pi-extensions/write-office.ts'),
+      join(process.cwd(), 'pi-extensions/memory.ts'),
     ])
   }
 const extensionPaths = process.argv.flatMap((argument, index) =>

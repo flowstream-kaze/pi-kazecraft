@@ -146,6 +146,7 @@ async function handleRequest(socket: Socket, value: unknown): Promise<void> {
     else if (value.action === 'rename') data = await renameSession(value)
     else if (value.action === 'improve_prompt') data = await improvePrompt(value)
     else if (value.action === 'run_prompt') data = await runPrompt(value)
+    else if (value.action === 'forget') data = forgetClosedSessions(value)
     else data = await sendCommand(value)
     respond(socket, { kind: 'response', id: value.id, ok: true, data })
   } catch (error) {
@@ -153,6 +154,22 @@ async function handleRequest(socket: Socket, value: unknown): Promise<void> {
   } finally {
     if (tracksActivity) activeRequests -= 1
   }
+}
+
+/**
+ * Removes the closed sessions of a project that was deleted. A closed session otherwise stays in
+ * the list until the manager restarts, which kept a deleted project's section in the sidebar. Only
+ * exited sessions go; a running one is never touched.
+ */
+function forgetClosedSessions(request: ManagerRequest): { forgotten: number } {
+  if (typeof request.cwd !== 'string') throw new Error('Project folder is required')
+  let forgotten = 0
+  for (const [id, { summary }] of sessions) {
+    if (summary.cwd !== request.cwd || summary.status !== 'exited') continue
+    sessions.delete(id)
+    forgotten += 1
+  }
+  return { forgotten }
 }
 
 function listSessions(): SessionSummary[] {
@@ -641,7 +658,7 @@ function isManagerRequest(value: unknown): value is ManagerRequest {
   return value.action === 'list' || value.action === 'create' || value.action === 'open'
     || value.action === 'close' || value.action === 'rename' || value.action === 'command'
     || value.action === 'improve_prompt' || value.action === 'run_prompt'
-    || value.action === 'status' || value.action === 'restart'
+    || value.action === 'status' || value.action === 'restart' || value.action === 'forget'
 }
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

@@ -24,7 +24,69 @@ export function getWslDistributionName(env: NodeJS.ProcessEnv = process.env): st
   return env.WSL_DISTRO_NAME || undefined
 }
 
-/** Opens a file or directory with its default application in the current desktop environment. */
+/**
+ * File types Windows would run rather than show. A link in a reply is written by the model, so a
+ * click never runs a program or script: these open the "Open with" dialog instead, where the user
+ * chooses an app (Notepad, for example) or cancels.
+ */
+const runnableExtensions = new Set([
+  // Programs and installers
+  '.appinstaller',
+  '.application',
+  '.appref-ms',
+  '.appx',
+  '.appxbundle',
+  '.com',
+  '.cpl',
+  '.exe',
+  '.jar',
+  '.msi',
+  '.msix',
+  '.msixbundle',
+  '.msp',
+  '.mst',
+  '.pif',
+  '.scr',
+  // Scripts
+  '.bat',
+  '.cmd',
+  '.hta',
+  '.js',
+  '.jse',
+  '.ps1',
+  '.psd1',
+  '.psm1',
+  '.sct',
+  '.vb',
+  '.vbe',
+  '.vbs',
+  '.ws',
+  '.wsc',
+  '.wsf',
+  '.wsh',
+  // Files Windows acts on when opened: settings, shortcuts, help, troubleshooters
+  '.chm',
+  '.diagcab',
+  '.inf',
+  '.lnk',
+  '.msc',
+  '.reg',
+  '.scf',
+  '.settingcontent-ms',
+  '.url',
+])
+
+export function isRunnableFile(path: string): boolean {
+  const dot = path.lastIndexOf('.')
+  return dot > Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))
+    && runnableExtensions.has(path.slice(dot).toLowerCase())
+}
+
+/**
+ * Opens a file or directory with its default application in the current desktop environment. On
+ * Windows a file type with no app shows Windows' own "How do you want to open this?" picker, and a
+ * program or script shows the "Open with" dialog instead of running.
+ */
 export async function openPath(
   path: string,
   platform = getDesktopPlatform(),
@@ -34,6 +96,7 @@ export async function openPath(
   if (platform === 'windows') {
     const pathInfo = await statPath(path)
     if (pathInfo.isDirectory()) await openApplication('explorer.exe', path, spawnProcess)
+    else if (isRunnableFile(path)) await openWithDialog(path, spawnProcess)
     else await invokeWindowsPath(path, spawnProcess)
     return
   }
@@ -113,6 +176,58 @@ function invokeWindowsPath(path: string, spawnProcess: SpawnProcess): Promise<vo
     child.once('exit', (code) => {
       if (code === 0) resolve()
       else reject(new Error(`Windows path opener exited with code ${code ?? 'unknown'}`))
+    })
+  })
+}
+
+/**
+ * Opens a File Explorer window on the folder holding `path`, with the file selected. The path is an
+ * existing file the backend resolved (Windows file names cannot contain quotes), and Explorer
+ * needs `/select,"path"` as one verbatim argument.
+ */
+export async function revealPath(
+  path: string,
+  platform = getDesktopPlatform(),
+  spawnProcess: SpawnProcess = spawn,
+): Promise<void> {
+  if (platform === 'windows') {
+    await startDetached('explorer.exe', [`/select,"${path}"`], spawnProcess, true)
+    return
+  }
+  // Elsewhere there is no common way to select a file, so its folder opens.
+  const folder = path.replace(/[\\/][^\\/]*$/, '') || path
+  const command = platform === 'wsl' ? 'explorer.exe' : 'xdg-open'
+  await openApplication(command, await externalWorkspacePath(folder, platform), spawnProcess)
+}
+
+/** Windows' "Open with" dialog for a file, which never runs it. */
+function openWithDialog(path: string, spawnProcess: SpawnProcess): Promise<void> {
+  return startDetached(
+    'rundll32.exe',
+    [`shell32.dll,OpenAs_RunDLL ${path}`],
+    spawnProcess,
+    true,
+  )
+}
+
+function startDetached(
+  command: string,
+  args: string[],
+  spawnProcess: SpawnProcess,
+  verbatim = false,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawnProcess(command, args, {
+      detached: true,
+      stdio: 'ignore',
+      shell: false,
+      windowsHide: false,
+      windowsVerbatimArguments: verbatim,
+    })
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
     })
   })
 }

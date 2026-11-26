@@ -148,6 +148,26 @@ export async function getWorkspaceFile(cwd: string, path: string): Promise<Works
   )
 }
 
+/** Which of the names a reply mentions are existing files, with their full paths. */
+export async function findMentionedFiles(
+  cwd: string,
+  mentions: string[],
+): Promise<{ text: string; path: string }[]> {
+  const result = await request<{ files: { text: string; path: string }[] }>(
+    '/api/files/mentions',
+    { method: 'POST', body: JSON.stringify({ cwd, mentions }) },
+  )
+  return result.files
+}
+
+/** Opens File Explorer on the folder holding a file, with the file selected. */
+export async function revealWorkspaceFile(cwd: string, path: string): Promise<void> {
+  await request<void>('/api/files/reveal', {
+    method: 'POST',
+    body: JSON.stringify({ cwd, path }),
+  })
+}
+
 export async function openWorkspaceFile(cwd: string, path: string): Promise<void> {
   await request<void>('/api/files/open', {
     method: 'POST',
@@ -254,6 +274,52 @@ export async function deleteSession(cwd: string, sessionPath: string): Promise<v
   await request<void>('/api/sessions/delete', {
     method: 'POST',
     body: JSON.stringify({ cwd, sessionPath }),
+  })
+}
+
+/** The agent's global memory and skills, for Settings → Memory. */
+export interface AgentMemory {
+  path: string
+  content: string
+  /** The starting text offered for an empty memory. */
+  template: string
+  skillsPath: string
+  skills: { name: string; description: string; path: string }[]
+}
+
+export async function getAgentMemory(): Promise<AgentMemory> {
+  return request('/api/memory')
+}
+
+export async function saveAgentMemory(content: string): Promise<void> {
+  await request('/api/memory', { method: 'PUT', body: JSON.stringify({ content }) })
+}
+
+/** A model Pi knows, as Settings → Models shows it. */
+export interface CatalogModel {
+  provider: string
+  id: string
+  name: string
+  contextWindow?: number
+  maxTokens?: number
+  images: boolean
+  reasoning: boolean
+  /** Whether llama-swap has it loaded right now (managed: false when it is not behind llama-swap). */
+  swap: ModelSwitchStatus
+}
+
+export async function listModelCatalog(): Promise<{
+  models: CatalogModel[]
+  defaultModel: { provider: string; id: string } | null
+}> {
+  return request('/api/models')
+}
+
+/** Makes a model the one new Pi sessions start with. */
+export async function setDefaultModel(provider: string, model: string): Promise<void> {
+  await request('/api/models/default', {
+    method: 'POST',
+    body: JSON.stringify({ provider, model }),
   })
 }
 

@@ -7,6 +7,7 @@ import {
   getGitSnapshot,
   openExplorer,
   openTerminal,
+  preloadModel,
   pushCommits,
   resetGitCommit,
   restartManager,
@@ -1703,6 +1704,18 @@ function App() {
             window.localStorage.setItem('pi-livecraft.shortcuts', JSON.stringify(defaultShortcuts))
           }}
           onClose={() => setSettingsOpen(false)}
+          currentModel={selectedSession && isObject(snapshot.state?.model)
+              && typeof snapshot.state.model.provider === 'string'
+              && typeof snapshot.state.model.id === 'string'
+            ? `${snapshot.state.model.provider}/${snapshot.state.model.id}`
+            : undefined}
+          onUseModelInSession={selectedSession
+            ? async (provider, id) => {
+              await handleComposerCommand({ type: 'set_model', provider, modelId: id })
+              // Start loading it now, as choosing it in the message box's picker does.
+              await preloadModel(provider, id).catch(() => undefined)
+            }
+            : undefined}
         />
       )}
     </div>

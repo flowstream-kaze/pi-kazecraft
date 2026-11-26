@@ -14,6 +14,9 @@ import {
   WELCOME_BANNER_BOX,
 } from '../../components/welcome-banner-store.ts'
 import { SidebarBanner } from '../workspace/SidebarBanner.tsx'
+import { FaqSettings } from './FaqSettings.tsx'
+import { MemorySettings } from './MemorySettings.tsx'
+import { ModelSettings } from './ModelSettings.tsx'
 import type { CommandDefinition, CommandId } from '../commands/command-registry.ts'
 import { shortcutFromEvent, shortcutConflicts } from '../commands/command-registry.ts'
 import {
@@ -50,12 +53,15 @@ const themeVariableLabels: Record<ThemeVariable, string> = {
 
 /** Identifies a settings tab. Extend this union when adding a new tab. */
 export type SettingsTabId =
+  | 'models'
+  | 'memory'
   | 'themes'
   | 'text'
   | 'sidebar'
   | 'notifications'
   | 'terminal'
   | 'shortcuts'
+  | 'faq'
 
 /** Describes one section in the settings modal's side list. */
 export interface SettingsTabDefinition {
@@ -68,6 +74,20 @@ export interface SettingsTabDefinition {
 
 /** Ordered list of sections rendered in the settings modal. */
 const settingsTabs: SettingsTabDefinition[] = [
+  {
+    id: 'models',
+    label: 'Models',
+    keywords: 'model gemma bonsai switch load default context chat coding llama-swap',
+    icon: <NavIcon d='m3.5 7.5 8.5-4 8.5 4-8.5 4-8.5-4Zm0 4.5 8.5 4 8.5-4M3.5 16.5l8.5 4 8.5-4' />,
+  },
+  {
+    id: 'memory',
+    label: 'Memory',
+    keywords: 'memory remember skills learn notes preferences agent',
+    icon: (
+      <NavIcon d='M9 4a3 3 0 0 0-3 3v.2A3 3 0 0 0 4 10a3 3 0 0 0 1.2 2.4A3 3 0 0 0 9 17v3M15 4a3 3 0 0 1 3 3v.2A3 3 0 0 1 20 10a3 3 0 0 1-1.2 2.4A3 3 0 0 1 15 17v3M12 4v16' />
+    ),
+  },
   {
     id: 'themes',
     label: 'Color themes',
@@ -105,6 +125,15 @@ const settingsTabs: SettingsTabDefinition[] = [
     label: 'Shortcuts',
     keywords: 'keyboard hotkeys keys',
     icon: <NavIcon d='M3 7h18v10H3zM7 10h.01M10.5 10h.01M14 10h.01M17 10h.01M7.5 14h9' />,
+  },
+  {
+    id: 'faq',
+    label: 'Help & FAQ',
+    keywords:
+      'help faq questions how works stack pi kazecraft llama-swap context compaction privacy files change modify',
+    icon: (
+      <NavIcon d='M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01' />
+    ),
   },
 ]
 
@@ -176,6 +205,10 @@ interface SettingsPanelProps {
   onResetTheme: (id: string) => void
   onReset: () => void
   onClose: () => void
+  /** "provider/id" of the open chat's model, for Settings → Models. */
+  currentModel?: string
+  /** Switches the open chat to a model; undefined when no chat is open. */
+  onUseModelInSession?: (provider: string, id: string) => Promise<void>
 }
 
 // ── Section components ─────────────────────────────────────────────
@@ -689,6 +722,8 @@ export function SettingsPanel({
   onResetTheme,
   onReset,
   onClose,
+  currentModel,
+  onUseModelInSession,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab)
   const [search, setSearch] = useState('')
@@ -762,6 +797,21 @@ export function SettingsPanel({
           </nav>
           <section className='settings-content'>
             <h2 className='settings-section-title'>{activeLabel}</h2>
+            {activeTab === 'models' && (
+              <TabPanel key='models' id='settings-tab-models' labelledBy='settings-tab-btn-models'>
+                <ModelSettings currentModel={currentModel} onUseInSession={onUseModelInSession} />
+              </TabPanel>
+            )}
+            {activeTab === 'memory' && (
+              <TabPanel key='memory' id='settings-tab-memory' labelledBy='settings-tab-btn-memory'>
+                <MemorySettings />
+              </TabPanel>
+            )}
+            {activeTab === 'faq' && (
+              <TabPanel key='faq' id='settings-tab-faq' labelledBy='settings-tab-btn-faq'>
+                <FaqSettings />
+              </TabPanel>
+            )}
             {activeTab === 'notifications' && (
               <TabPanel
                 key='notifications'

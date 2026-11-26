@@ -11,6 +11,7 @@ import {
 } from 'react'
 import type { JsonObject } from '../../../shared/types.ts'
 import { WelcomeBanner } from '../../components/WelcomeBanner.tsx'
+import { FileLinksProvider } from './FileLink.tsx'
 import type { Activity } from './activity.ts'
 import { turnUsageByMessage } from './message-usage.ts'
 import {
@@ -352,58 +353,125 @@ export function Conversation(
   }
 
   return (
-    <div className='conversation-shell'>
-      <section
-        aria-live='polite'
-        className='conversation'
-        onKeyDown={handleConversationKeyDown}
-        onPointerMove={(event) => {
-          if (event.buttons > 0) markUpwardScrollIntent()
-        }}
-        onScroll={handleConversationScroll}
-        onTouchMove={markUpwardScrollIntent}
-        onWheel={handleConversationWheel}
-        ref={conversationRef}
-        tabIndex={0}
-      >
-        <div className='conversation-content' ref={conversationContentRef}>
-          {renderedMessageEntries.map((entry) => {
-            const { message } = entry
-            if (entry.source === 'history') {
-              const index = entry.historyIndex
-              const calls = showToolCalls ? toolCallsInMessage(message) : []
-              const usage = usagesByMessage.get(index)
+    <FileLinksProvider cwd={workingDirectory} onError={onError}>
+      <div className='conversation-shell'>
+        <section
+          aria-live='polite'
+          className='conversation'
+          onKeyDown={handleConversationKeyDown}
+          onPointerMove={(event) => {
+            if (event.buttons > 0) markUpwardScrollIntent()
+          }}
+          onScroll={handleConversationScroll}
+          onTouchMove={markUpwardScrollIntent}
+          onWheel={handleConversationWheel}
+          ref={conversationRef}
+          tabIndex={0}
+        >
+          <div className='conversation-content' ref={conversationContentRef}>
+            {renderedMessageEntries.map((entry) => {
+              const { message } = entry
+              if (entry.source === 'history') {
+                const index = entry.historyIndex
+                const calls = showToolCalls ? toolCallsInMessage(message) : []
+                const usage = usagesByMessage.get(index)
+                if (!isVisibleConversationMessage(message) && calls.length === 0) return null
+                return (
+                  <div
+                    className={highlightedTarget === `message:${index}`
+                      ? 'conversation-target'
+                      : undefined}
+                    data-message-index={index}
+                    key={entry.key}
+                  >
+                    {isVisibleConversationMessage(message) && (
+                      <MessageCard
+                        copyInResponseBar={usage !== undefined}
+                        message={message}
+                        onError={onError}
+                        onFork={onFork}
+                        onRewind={onRewind}
+                      />
+                    )}
+                    {calls.map((call) => {
+                      const execution = executionsByCallId.get(call.id)
+                      const result = resultsByCallId.get(call.id) ?? execution?.result
+                      return (
+                        <ToolCallCard
+                          args={call.args}
+                          hasResult={result !== undefined}
+                          semiDetailed={semiDetailed}
+                          id={call.id}
+                          durationMs={toolDurations.get(call.id)}
+                          interrupted={execution?.status === 'interrupted'}
+                          key={call.id}
+                          name={call.name}
+                          onError={onError}
+                          partialResultContent={execution?.partialResult?.content}
+                          repositoryRoot={repositoryRoot}
+                          resultContent={result?.content}
+                          workingDirectory={workingDirectory}
+                          resultDetails={result?.details}
+                          resultError={result?.isError}
+                          streaming={execution?.status === 'generating'}
+                          streamingArguments={execution?.rawArguments}
+                          targeted={highlightedTarget === `tool:${call.id}`}
+                        />
+                      )
+                    })}
+                    {usage && (
+                      <ResponseBar
+                        message={message}
+                        onError={onError}
+                        turnNumber={turnNumbers.get(index)}
+                      />
+                    )}
+                  </div>
+                )
+              }
+
+              const parts = assistantTurnParts(message)
+              const calls = showToolCalls
+                ? parts.flatMap((part) => part.kind === 'tool' ? [part.call] : [])
+                : []
               if (!isVisibleConversationMessage(message) && calls.length === 0) return null
               return (
                 <div
-                  className={highlightedTarget === `message:${index}`
-                    ? 'conversation-target'
-                    : undefined}
-                  data-message-index={index}
+                  className={`conversation-entry${
+                    highlightedTarget === `live:${entry.key}` ? ' conversation-target' : ''
+                  }`}
+                  data-message-key={entry.key}
                   key={entry.key}
                 >
-                  {isVisibleConversationMessage(message) && (
-                    <MessageCard
-                      copyInResponseBar={usage !== undefined}
-                      message={message}
-                      onError={onError}
-                      onFork={onFork}
-                      onRewind={onRewind}
-                    />
-                  )}
-                  {calls.map((call) => {
-                    const execution = executionsByCallId.get(call.id)
-                    const result = resultsByCallId.get(call.id) ?? execution?.result
+                  {parts.map((part) => {
+                    if (part.kind === 'message')
+                      return isVisibleConversationMessage(part.message)
+                        ? (
+                          <MessageCard
+                            key='message'
+                            message={part.message}
+                            onError={onError}
+                            onFork={onFork}
+                            onRewind={onRewind}
+                          />
+                        )
+                        : null
+                    if (!showToolCalls) return null
+                    const execution = executionsByCallId.get(part.call.id)
+                    const result = execution?.result
                     return (
                       <ToolCallCard
-                        args={call.args}
+                        animateLiveChanges
+                        args={part.call.args}
                         hasResult={result !== undefined}
                         semiDetailed={semiDetailed}
-                        id={call.id}
-                        durationMs={toolDurations.get(call.id)}
+                        id={part.call.id}
+                        durationMs={toolDurations.get(part.call.id)}
                         interrupted={execution?.status === 'interrupted'}
-                        key={call.id}
-                        name={call.name}
+                        key={part.call.id}
+                        name={part
+                          .call
+                          .name}
                         onError={onError}
                         partialResultContent={execution?.partialResult?.content}
                         repositoryRoot={repositoryRoot}
@@ -413,162 +481,97 @@ export function Conversation(
                         resultError={result?.isError}
                         streaming={execution?.status === 'generating'}
                         streamingArguments={execution?.rawArguments}
-                        targeted={highlightedTarget === `tool:${call.id}`}
+                        targeted={highlightedTarget === `tool:${part.call.id}`}
                       />
                     )
                   })}
-                  {usage && (
-                    <ResponseBar
-                      message={message}
-                      onError={onError}
-                      turnNumber={turnNumbers.get(index)}
-                    />
-                  )}
                 </div>
               )
-            }
-
-            const parts = assistantTurnParts(message)
-            const calls = showToolCalls
-              ? parts.flatMap((part) => part.kind === 'tool' ? [part.call] : [])
-              : []
-            if (!isVisibleConversationMessage(message) && calls.length === 0) return null
-            return (
-              <div
-                className={`conversation-entry${
-                  highlightedTarget === `live:${entry.key}` ? ' conversation-target' : ''
-                }`}
-                data-message-key={entry.key}
-                key={entry.key}
+            })}
+            {showToolCalls && toolExecutions
+              .filter((execution) =>
+                !toolCallIds.has(execution.id) && !liveToolCallIds.has(execution.id)
+              )
+              .map((execution) => (
+                <ToolCallCard
+                  animateLiveChanges
+                  args={execution.args}
+                  hasResult={execution.result !== undefined}
+                  semiDetailed={semiDetailed}
+                  id={execution.id}
+                  durationMs={toolDurations.get(execution.id)}
+                  interrupted={execution.status === 'interrupted'}
+                  key={execution.id}
+                  name={execution.name}
+                  onError={onError}
+                  partialResultContent={execution.partialResult?.content}
+                  repositoryRoot={repositoryRoot}
+                  resultContent={execution.result?.content}
+                  workingDirectory={workingDirectory}
+                  resultDetails={execution.result?.details}
+                  resultError={execution.result?.isError}
+                  streaming={execution.status === 'generating'}
+                  streamingArguments={execution.rawArguments}
+                  targeted={highlightedTarget === `tool:${execution.id}`}
+                />
+              ))}
+            {pendingSteering.map((message, index) => (
+              <article
+                className='message user pending-steering conversation-entry'
+                key={`${message}-${index}`}
               >
-                {parts.map((part) => {
-                  if (part.kind === 'message')
-                    return isVisibleConversationMessage(part.message)
-                      ? (
-                        <MessageCard
-                          key='message'
-                          message={part.message}
-                          onError={onError}
-                          onFork={onFork}
-                          onRewind={onRewind}
-                        />
-                      )
-                      : null
-                  if (!showToolCalls) return null
-                  const execution = executionsByCallId.get(part.call.id)
-                  const result = execution?.result
-                  return (
-                    <ToolCallCard
-                      animateLiveChanges
-                      args={part.call.args}
-                      hasResult={result !== undefined}
-                      semiDetailed={semiDetailed}
-                      id={part.call.id}
-                      durationMs={toolDurations.get(part.call.id)}
-                      interrupted={execution?.status === 'interrupted'}
-                      key={part.call.id}
-                      name={part
-                        .call
-                        .name}
-                      onError={onError}
-                      partialResultContent={execution?.partialResult?.content}
-                      repositoryRoot={repositoryRoot}
-                      resultContent={result?.content}
-                      workingDirectory={workingDirectory}
-                      resultDetails={result?.details}
-                      resultError={result?.isError}
-                      streaming={execution?.status === 'generating'}
-                      streamingArguments={execution?.rawArguments}
-                      targeted={highlightedTarget === `tool:${part.call.id}`}
-                    />
-                  )
-                })}
-              </div>
-            )
-          })}
-          {showToolCalls && toolExecutions
-            .filter((execution) =>
-              !toolCallIds.has(execution.id) && !liveToolCallIds.has(execution.id)
-            )
-            .map((execution) => (
-              <ToolCallCard
-                animateLiveChanges
-                args={execution.args}
-                hasResult={execution.result !== undefined}
-                semiDetailed={semiDetailed}
-                id={execution.id}
-                durationMs={toolDurations.get(execution.id)}
-                interrupted={execution.status === 'interrupted'}
-                key={execution.id}
-                name={execution.name}
-                onError={onError}
-                partialResultContent={execution.partialResult?.content}
-                repositoryRoot={repositoryRoot}
-                resultContent={execution.result?.content}
-                workingDirectory={workingDirectory}
-                resultDetails={execution.result?.details}
-                resultError={execution.result?.isError}
-                streaming={execution.status === 'generating'}
-                streamingArguments={execution.rawArguments}
-                targeted={highlightedTarget === `tool:${execution.id}`}
-              />
+                <div className='content'>
+                  <Markdown>{message || 'Image attached'}</Markdown>
+                </div>
+                <span className='pending-steering-status' role='status'>
+                  <i aria-hidden='true' />Waiting to steer…
+                </span>
+              </article>
             ))}
-          {pendingSteering.map((message, index) => (
-            <article
-              className='message user pending-steering conversation-entry'
-              key={`${message}-${index}`}
-            >
-              <div className='content'>
-                <Markdown>{message || 'Image attached'}</Markdown>
-              </div>
-              <span className='pending-steering-status' role='status'>
-                <i aria-hidden='true' />Waiting to steer…
-              </span>
-            </article>
-          ))}
-          {visibleMessages.length === 0 && visibleLiveMessages.length === 0 && pendingSteering
-                .length === 0
-            && (
-              <div className='empty-conversation'>
-                <WelcomeBanner />
-                <h2>Session ready</h2>
-                <p>Send a message or use a command from your Pi installation.</p>
+            {visibleMessages.length === 0 && visibleLiveMessages.length === 0 && pendingSteering
+                  .length === 0
+              && (
+                <div className='empty-conversation'>
+                  <WelcomeBanner />
+                  <h2>Session ready</h2>
+                  <p>Send a message or use a command from your Pi installation.</p>
+                </div>
+              )}
+            {activity && (
+              <div className='conversation-activity'>
+                <ActivityIndicator activity={activity} agentName={agentName} />
               </div>
             )}
-          {activity && (
-            <div className='conversation-activity'>
-              <ActivityIndicator activity={activity} agentName={agentName} />
-            </div>
-          )}
-        </div>
-        <div className='scroll-to-bottom-anchor'>
-          <button
-            aria-label='Resume automatic scrolling'
-            className={`scroll-to-bottom${showScrollToBottom ? ' visible' : ''}`}
-            onClick={resumeAutoScroll}
-            type='button'
-          >
-            <svg aria-hidden='true' viewBox='0 0 16 16' width='16' height='16'>
-              <path
-                d='m4 6 4 4 4-4'
-                fill='none'
-                stroke='currentColor'
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth='1.8'
-              />
-            </svg>
-          </button>
-        </div>
-      </section>
-      {messageNavigatorOpen && (
-        <MessageNavigator
-          anchors={railAnchors}
-          onClose={onMessageNavigatorClose}
-          onSelect={navigateToAnchor}
-        />
-      )}
-    </div>
+          </div>
+          <div className='scroll-to-bottom-anchor'>
+            <button
+              aria-label='Resume automatic scrolling'
+              className={`scroll-to-bottom${showScrollToBottom ? ' visible' : ''}`}
+              onClick={resumeAutoScroll}
+              type='button'
+            >
+              <svg aria-hidden='true' viewBox='0 0 16 16' width='16' height='16'>
+                <path
+                  d='m4 6 4 4 4-4'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth='1.8'
+                />
+              </svg>
+            </button>
+          </div>
+        </section>
+        {messageNavigatorOpen && (
+          <MessageNavigator
+            anchors={railAnchors}
+            onClose={onMessageNavigatorClose}
+            onSelect={navigateToAnchor}
+          />
+        )}
+      </div>
+    </FileLinksProvider>
   )
 }
 

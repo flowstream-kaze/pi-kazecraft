@@ -137,6 +137,8 @@ export interface ManagerRequest {
     | 'run_prompt'
     | 'status'
     | 'restart'
+    /** Drops the closed sessions of a deleted project (`cwd`) from the session list. */
+    | 'forget'
   sessionId?: string
   cwd?: string
   name?: string

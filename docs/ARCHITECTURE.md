@@ -32,7 +32,7 @@ Use the [`src/features/` map](/src/features/README.md) to locate frontend owners
 
 ## Backend and manager
 
-`server/backend.ts` exposes the web API, validates HTTP requests, serves the build, and broadcasts SSE events. Domain behavior for folder picking, Git, terminal launching, and todos lives in `server/features/`; route definitions remain in the backend. Other neighboring modules provide workspace files, recent sessions, and system integrations.
+`server/backend.ts` exposes the web API, validates HTTP requests, serves the build, and broadcasts SSE events. It listens on 127.0.0.1 only, and `server/request-guard.ts` refuses, before any route runs, a request addressed to a non-local host name (DNS rebinding) and a state-changing request whose `Origin` or `Sec-Fetch-Site` names another website, so a page from another site open in the browser cannot start Pi commands, write Pi's memory or open files. Clients that are not browsers send neither header and are unaffected (`test/request-guard.test.ts`). Domain behavior for folder picking, Git, terminal launching, and todos lives in `server/features/`; route definitions remain in the backend. Other neighboring modules provide workspace files, recent sessions, and system integrations.
 
 `server/manager.ts` is the sole owner of `pi --mode rpc` processes. `server/pi-process.ts` starts them with the extensions from `pi-extensions/`, while `server/manager-client.ts` carries backend requests over local JSON Lines. Keeping this ownership outside the backend preserves Pi sessions across backend restarts.
 

@@ -1,7 +1,9 @@
+/* Above the session's "Connecting to Pi" card (20) and ordinary dialogs (30), so Settings is never
+   covered while a session loads. */
 .settings-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 35;
   display: grid;
   place-items: start center;
   padding-top: 8vh;
@@ -544,7 +546,7 @@
   flex-shrink: 0;
 }
 .theme-select-content {
-  z-index: 20;
+  z-index: 40;
   min-width: var(--radix-select-trigger-width);
   /* !important: Radix pose un max-height: 100% en style inline sur le contenu
      popper, qui écraserait sinon la limite et laisserait la liste déborder. */
@@ -682,6 +684,261 @@
     transition: none;
   }
 }
+/* ── Models ───────────────────────────────────────────────────── */
+.model-settings > p,
+.faq-settings > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.settings-hint {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.model-settings-notice,
+.model-settings-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.model-settings-notice {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.model-settings-error {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+}
+.model-cards {
+  display: grid;
+  gap: 14px;
+}
+.model-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.model-card.current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.model-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.model-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.model-card header code {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.model-status {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.model-status.ready {
+  background: color-mix(in srgb, var(--success, #2e9e5b) 16%, var(--surface));
+  color: var(--success, #2e9e5b);
+}
+.model-status.loading {
+  background: color-mix(in srgb, var(--warning, #c98a12) 16%, var(--surface));
+  color: var(--warning, #c98a12);
+}
+.model-status.idle {
+  background: var(--canvas);
+  color: var(--muted);
+}
+.model-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.model-badges:empty {
+  display: none;
+}
+.model-badges span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 11.5px;
+}
+.model-summary {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+.model-card h4 {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.model-best-for {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.55;
+}
+.model-details {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+.model-detail-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+}
+.model-detail-row dt {
+  color: var(--muted);
+}
+.model-detail-row dd {
+  margin: 0;
+}
+.model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.model-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-raised, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.model-actions button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--item-on-accent, #fff);
+}
+.model-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* ── Memory ───────────────────────────────────────────────────── */
+.memory-settings > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.memory-settings h3 {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.memory-settings .memory-path {
+  margin: 0 0 8px;
+}
+.memory-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 12.5px/1.55 ui-monospace, monospace;
+  resize: vertical;
+}
+.memory-editor:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+.memory-empty {
+  color: var(--muted);
+}
+.memory-skills {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.memory-skills li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.memory-skills li > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.memory-skills span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.memory-skills .model-actions {
+  margin-top: 8px;
+}
+
+/* ── Help & FAQ ───────────────────────────────────────────────── */
+.faq-settings h3 {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.faq-item {
+  border-bottom: 1px solid var(--line);
+}
+.faq-item summary {
+  padding: 9px 2px;
+  cursor: pointer;
+  font-weight: 550;
+  list-style-position: inside;
+}
+.faq-item summary:hover {
+  color: var(--accent);
+}
+.faq-answer {
+  padding: 0 4px 12px 18px;
+  line-height: 1.55;
+}
+.faq-answer p {
+  margin: 0 0 8px;
+}
+.faq-answer ul,
+.faq-answer ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.faq-answer li {
+  margin-bottom: 4px;
+}
+.faq-answer code {
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .model-detail-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
 @media (max-width: 520px) {
   .settings-panel {
     height: calc(100vh - 32px);

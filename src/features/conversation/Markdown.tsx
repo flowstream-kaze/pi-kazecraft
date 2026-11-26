@@ -2,6 +2,7 @@ import { lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode } fro
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyablePre } from './CodeBlock.tsx'
+import { FileMention } from './FileLink.tsx'
 import { parseMarkdownFrontmatter } from './markdown-frontmatter.ts'
 
 const LazyCodeHighlighter = lazy(() => import('./CodeHighlighter'))
@@ -120,9 +121,16 @@ export const Markdown = memo(function Markdown(
       )}
       <ReactMarkdown
         components={{
-          code: ({ children: code, className }) => (
-            <MarkdownCode className={className}>{code}</MarkdownCode>
-          ),
+          code: ({ children: code, className, node }) => {
+            // Inline code (one line, no language) may name a file the reply made; FileMention
+            // turns it into a link when the file exists, and leaves it plain otherwise.
+            const inline = !className
+              && node?.position?.start.line === node?.position?.end.line
+              && typeof code === 'string'
+            return inline
+              ? <FileMention text={code}>{code}</FileMention>
+              : <MarkdownCode className={className}>{code}</MarkdownCode>
+          },
           pre: ({ children: code }) =>
             copyablePre
               ? <CopyablePre onError={onError}>{code}</CopyablePre>

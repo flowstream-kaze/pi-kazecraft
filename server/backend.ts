@@ -11,6 +11,7 @@ import {
   validProjectName,
 } from './project-directory.ts'
 import { recycleFolder } from './recycle-folder.ts'
+import { refusalReason } from './request-guard.ts'
 import { renderSpeech } from './features/read-aloud/speech.ts'
 import { defaultVoice, isReadAloudVoice } from '../shared/read-aloud-voices.ts'
 import { ManagerRuntimeMonitor } from './manager-runtime-monitor.ts'
@@ -46,19 +47,25 @@ import {
 } from './features/decode-speed/decode-speed.ts'
 import { AttachmentError, saveAttachment } from './features/attachments/attachments.ts'
 import { modelSwitchStatus, preloadModel } from './features/model-switch/model-switch.ts'
+import { readModelCatalog, setDefaultModel } from './features/model-catalog/model-catalog.ts'
+import {
+  listSkills,
+  memoryPath,
+  memoryTemplate,
+  readMemory,
+  skillsDir,
+  writeMemory,
+} from '../pi-extensions/memory-store.ts'
 import { openTerminalApplication, TerminalTemplateError } from './features/terminal/launcher.ts'
 import {
   loadWorkspaceTodos,
   parseTodoItems,
   saveWorkspaceTodos,
 } from './features/todos/todo-store.ts'
-import {
-  readWorkspaceFile,
-  resolveWorkspaceFilePath,
-  WorkspaceFileError,
-} from './workspace-file.ts'
+import { readWorkspaceFile, WorkspaceFileError } from './workspace-file.ts'
 import { activeSessionMessages, LiveSessionEvents } from './session-snapshot.ts'
-import { externalWorkspacePath, openPath } from './system-integration.ts'
+import { externalWorkspacePath, openPath, revealPath } from './system-integration.ts'
+import { existingLocalFile, findMentionedFiles } from './features/file-links/file-links.ts'
 import { expandHomePath } from './home-path.ts'
 import type {
   ConversationMessage,
@@ -136,6 +143,9 @@ server.listen(port, host, () => {
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? 'GET'
   const url = new URL(request.url ?? '/', `http://${host}`)
+  // Other websites open in the browser must not reach Pi, its memory or the files.
+  const refusal = refusalReason(method, request.headers)
+  if (refusal) throw new HttpError(403, refusal)
 
   if (method === 'POST' && url.pathname === '/api/read-aloud') {
     if (!request.headers['content-type']?.startsWith('application/json'))
@@ -243,6 +253,54 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
 
+  // Settings → Memory: the agent's global memory file and its skills.
+  if (method === 'GET' && url.pathname === '/api/memory') {
+    sendJson(response, 200, {
+      path: memoryPath(),
+      content: await readMemory(),
+      template: memoryTemplate,
+      skillsPath: skillsDir(),
+      skills: await listSkills(),
+    })
+    return
+  }
+
+  if (method === 'PUT' && url.pathname === '/api/memory') {
+    const body = await readJsonBody(request)
+    if (typeof body.content !== 'string') throw new HttpError(400, 'Memory text is required')
+    try {
+      await writeMemory(body.content)
+    } catch (error) {
+      throw new HttpError(400, errorMessage(error))
+    }
+    sendJson(response, 200, { saved: true })
+    return
+  }
+
+  // Settings → Models: every model Pi knows, whether llama-swap has it loaded, and the default.
+  if (method === 'GET' && url.pathname === '/api/models') {
+    const catalog = await readModelCatalog()
+    const models = await Promise.all(catalog.models.map(async (model) => ({
+      ...model,
+      swap: await modelSwitchStatus(model.baseUrl, model.id),
+    })))
+    sendJson(response, 200, { models, defaultModel: catalog.defaultModel })
+    return
+  }
+
+  if (method === 'POST' && url.pathname === '/api/models/default') {
+    const body = await readJsonBody(request)
+    if (typeof body.provider !== 'string' || typeof body.model !== 'string')
+      throw new HttpError(400, 'Provider and model are required')
+    try {
+      await setDefaultModel(body.provider, body.model)
+    } catch (error) {
+      throw new HttpError(400, error instanceof Error ? error.message : String(error))
+    }
+    sendJson(response, 200, { provider: body.provider, model: body.model })
+    return
+  }
+
   if (method === 'GET' && url.pathname === '/api/model-switch') {
     // Where a provider's model stands in llama-swap (stopping, starting, ready), for the loading notice.
     const providers = await readProviderBaseUrls()
@@ -327,6 +385,38 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
 
+  // File names a reply mentions that exist, so the page can make them clickable.
+  if (method === 'POST' && url.pathname === '/api/files/mentions') {
+    const body = await readJsonBody(request)
+    if (typeof body.cwd !== 'string') throw new HttpError(400, 'Working directory is required')
+    if (!Array.isArray(body.mentions)) throw new HttpError(400, 'Mentions are required')
+    const mentions = body.mentions.filter((mention): mention is string =>
+      typeof mention === 'string'
+    )
+    const cwd = await resolveWorkingDirectory(body.cwd)
+    sendJson(response, 200, { files: await findMentionedFiles(cwd, mentions) })
+    return
+  }
+
+  // Show in folder: a File Explorer window with the file selected.
+  if (method === 'POST' && url.pathname === '/api/files/reveal') {
+    const body = await readJsonBody(request)
+    if (typeof body.cwd !== 'string') throw new HttpError(400, 'Working directory is required')
+    if (typeof body.path !== 'string' || !body.path)
+      throw new HttpError(400, 'File path is required')
+    const cwd = await resolveWorkingDirectory(body.cwd)
+    let path: string
+    try {
+      path = await existingLocalFile(cwd, body.path)
+    } catch (error) {
+      if (error instanceof WorkspaceFileError) throw new HttpError(error.status, error.message)
+      throw new HttpError(400, errorMessage(error))
+    }
+    await revealPath(path)
+    sendJson(response, 200, {})
+    return
+  }
+
   if (method === 'POST' && url.pathname === '/api/files/open') {
     const body = await readJsonBody(request)
     if (typeof body.cwd !== 'string') throw new HttpError(400, 'Working directory is required')
@@ -334,7 +424,15 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       throw new HttpError(400, 'File path is required')
     try {
       const cwd = await resolveWorkingDirectory(body.cwd)
-      await openPath(await resolveWorkspaceFilePath(cwd, body.path, true))
+      // Same checks as Show in folder: an existing local file, never a network path.
+      let path: string
+      try {
+        path = await existingLocalFile(cwd, body.path)
+      } catch (error) {
+        if (error instanceof WorkspaceFileError) throw error
+        throw new HttpError(400, errorMessage(error))
+      }
+      await openPath(path)
       sendJson(response, 200, {})
     } catch (error) {
       if (error instanceof WorkspaceFileError) throw new HttpError(error.status, error.message)
@@ -483,7 +581,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     if (typeof body.cwd !== 'string' || !body.cwd.trim())
       throw new HttpError(400, 'Project folder is required')
     const cwd = await existingDirectory(body.cwd)
+    // The manager keeps closed sessions listed until it restarts; drop the project's ones so its
+    // section does not come back. A manager older than this request just keeps them.
+    const forget = (folder: string) =>
+      manager.request({ action: 'forget', cwd: folder }).catch(() => undefined)
     if (!cwd) {
+      await forget(body.cwd)
       sendJson(response, 200, { deletedSessions: 0, folderRecycled: false, missing: true })
       return
     }
@@ -498,6 +601,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     }
     const deletedSessions = await deletePiSessionsInWorkspace(cwd)
     const folderRecycled = body.deleteFolder === true ? await recycleFolder(cwd) : false
+    await forget(cwd)
     sendJson(response, 200, { deletedSessions, folderRecycled })
     return
   }
