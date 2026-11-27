@@ -40,7 +40,7 @@ export function TodoWidget(
     workspacePath: string
   },
 ) {
-  const draftStorageKey = `pi-livecraft.todo-draft.${workspacePath}`
+  const draftStorageKey = `pi-kazecraft.todo-draft.${workspacePath}`
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [newText, setNewText] = useState(() => readDraft(draftStorageKey))
   const [editingId, setEditingId] = useState<string | null>(null)

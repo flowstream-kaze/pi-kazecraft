@@ -26,19 +26,19 @@ import type {
 } from '../shared/types.ts'
 
 const host = '127.0.0.1'
-const port = readPort('PI_LIVECRAFT_MANAGER_PORT', 43_120)
+const port = readPort('PI_KAZECRAFT_MANAGER_PORT', 43_120)
 const minimumOpenSessionsPerWorkspace = 3
-const idleReuseAfterMs = readDuration('PI_LIVECRAFT_IDLE_REUSE_AFTER_MS', 3 * 60_000)
+const idleReuseAfterMs = readDuration('PI_KAZECRAFT_IDLE_REUSE_AFTER_MS', 3 * 60_000)
 const clients = new Set<Socket>()
 const sessions = new Map<string, ManagedSession>()
 const openingSessions = new Map<string, Promise<SessionSummary>>()
 const restartExitCode = readRestartExitCode()
-const supervised = process.env.PI_LIVECRAFT_MANAGER_SUPERVISED === '1'
+const supervised = process.env.PI_KAZECRAFT_MANAGER_SUPERVISED === '1'
   && restartExitCode !== undefined
 const runtimeIdentity = {
   instanceId: randomUUID(),
   startedAt: new Date().toISOString(),
-  runtimeRevision: process.env.PI_LIVECRAFT_MANAGER_RUNTIME_REVISION ?? null,
+  runtimeRevision: process.env.PI_KAZECRAFT_MANAGER_RUNTIME_REVISION ?? null,
   supervised,
 }
 let shuttingDown = false
@@ -673,7 +673,7 @@ function readPort(primary: string, fallback: number): number {
 }
 
 function readRestartExitCode(): number | undefined {
-  const rawValue = process.env.PI_LIVECRAFT_MANAGER_RESTART_EXIT_CODE
+  const rawValue = process.env.PI_KAZECRAFT_MANAGER_RESTART_EXIT_CODE
   if (rawValue === undefined) return undefined
   const value = Number(rawValue)
   return Number.isInteger(value) && value > 0 && value <= 255 ? value : undefined

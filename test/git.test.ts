@@ -40,7 +40,7 @@ test('uses the destination path for renamed numstat records and preserves binary
 })
 
 test('reports untracked files and their line additions from a worktree', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
   try {
     await execFile('git', ['init', '--quiet'], { cwd: directory })
     await writeFile(join(directory, 'new-file.ts'), 'first line\nsecond line\n')
@@ -62,7 +62,7 @@ test('reports untracked files and their line additions from a worktree', async (
 })
 
 test('returns diffs for modified and untracked files', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
   try {
     await execFile('git', ['init', '--quiet'], { cwd: directory })
     await execFile('git', ['config', 'user.email', 'test@example.com'], { cwd: directory })
@@ -84,8 +84,8 @@ test('returns diffs for modified and untracked files', async () => {
 })
 
 test('reports, resets, and reverts unpushed commits', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
-  const remote = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-remote-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
+  const remote = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-remote-'))
   try {
     await execFile('git', ['init', '--bare', '--quiet'], { cwd: remote })
     await execFile('git', ['init', '--quiet'], { cwd: directory })
@@ -160,8 +160,8 @@ test('reports, resets, and reverts unpushed commits', async () => {
 })
 
 test('commits without pushing, pushes separately, and discards changes', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
-  const remote = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-remote-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
+  const remote = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-remote-'))
   try {
     await execFile('git', ['init', '--bare', '--quiet'], { cwd: remote })
     await execFile('git', ['init', '--quiet'], { cwd: directory })
@@ -212,7 +212,7 @@ test('commits without pushing, pushes separately, and discards changes', async (
 })
 
 test('discards only the selected file, including renamed and untracked files', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
   try {
     await execFile('git', ['init', '--quiet'], { cwd: directory })
     await execFile('git', ['config', 'user.email', 'test@example.com'], { cwd: directory })
@@ -249,7 +249,7 @@ test('discards only the selected file, including renamed and untracked files', a
 })
 
 test('rejects commit without changes or message', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
   try {
     await execFile('git', ['init', '--quiet'], { cwd: directory })
     await assert.rejects(commitChanges(directory, 'Nothing'), /no changes/)
@@ -261,7 +261,7 @@ test('rejects commit without changes or message', async () => {
 })
 
 test('rejects push without ahead commits', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const directory = await mkdtemp(join(tmpdir(), 'pi-kazecraft-git-'))
   try {
     await execFile('git', ['init', '--quiet'], { cwd: directory })
     await execFile('git', ['config', 'user.email', 'test@example.com'], { cwd: directory })

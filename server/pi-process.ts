@@ -12,7 +12,7 @@ import { isObject } from '../shared/is-object.ts'
 const activeChildren = new Set<ChildProcessWithoutNullStreams>()
 
 /** Dedicated Pi profile directory for isolated prompts so model/thinking defaults never leak into the user's main config. */
-export const ISOLATED_AGENT_DIR = join(homedir(), '.pi', 'livecraft-isolated')
+export const ISOLATED_AGENT_DIR = join(homedir(), '.pi', 'kazecraft-isolated')
 
 interface PendingRequest {
   resolve: (value: JsonObject) => void

@@ -5,7 +5,7 @@ import {
   type StoredPlanTiming,
 } from './plan-state.ts'
 
-const storagePrefix = 'pi-livecraft.plan-timing.'
+const storagePrefix = 'pi-kazecraft.plan-timing.'
 
 /**
  * Active time the panel folded itself, kept across a reload. The payload in the session only knows

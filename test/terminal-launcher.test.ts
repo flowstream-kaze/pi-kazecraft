@@ -138,7 +138,7 @@ test('hides brokered shells, waits for them, and continues after a broker failur
       _args: string[],
       options: { env?: NodeJS.ProcessEnv; windowsHide?: boolean },
     ) => {
-      const target = options.env?.PI_LIVECRAFT_TERMINAL_SHELL
+      const target = options.env?.PI_KAZECRAFT_TERMINAL_SHELL
       calls.push({ command: target ?? command, windowsHide: options.windowsHide })
       const child = new EventEmitter() as EventEmitter & { unref: () => void }
       child.unref = () => undefined

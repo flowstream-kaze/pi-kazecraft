@@ -161,8 +161,8 @@ export const BUILT_IN_THEMES: ThemePreset[] = [
 
 // ── Persistence keys ───────────────────────────────────────────────
 
-const STORAGE_KEY = 'pi-livecraft.themes'
-const LEGACY_THEME_KEY = 'pi-livecraft.theme'
+const STORAGE_KEY = 'pi-kazecraft.themes'
+const LEGACY_THEME_KEY = 'pi-kazecraft.theme'
 type ThemeStorage = {
   getItem: (key: string) => string | null
   setItem: (key: string, value: string) => void

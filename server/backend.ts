@@ -77,8 +77,8 @@ import type {
 import { isObject } from '../shared/is-object.ts'
 
 const host = '127.0.0.1'
-const port = readPort('PI_LIVECRAFT_BACKEND_PORT', 43_121)
-const managerPort = readPort('PI_LIVECRAFT_MANAGER_PORT', 43_120)
+const port = readPort('PI_KAZECRAFT_BACKEND_PORT', 43_121)
+const managerPort = readPort('PI_KAZECRAFT_MANAGER_PORT', 43_120)
 const manager = new ManagerClient(host, managerPort)
 const eventClients = new Set<ServerResponse>()
 const liveSessionEvents = new Map<string, LiveSessionEvents>()

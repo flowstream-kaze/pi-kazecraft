@@ -80,7 +80,7 @@ export default function registerPlan(pi: ExtensionAPI): void {
       }
       const now = Date.now()
       const { steps, activeMs } = clock.commit(plan.steps, now)
-      // `details` reaches Pi Livecraft and stays out of the model context.
+      // `details` reaches Pi Kazecraft and stays out of the model context.
       const committed: Plan = { ...plan, activeMs, recordedAt: now, steps }
       return {
         content: [{ type: 'text' as const, text: acknowledge(committed) }],

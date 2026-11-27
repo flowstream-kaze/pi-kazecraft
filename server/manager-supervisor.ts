@@ -20,9 +20,9 @@ async function launch(): Promise<void> {
     child = spawn(process.execPath, [managerEntry], {
       env: {
         ...process.env,
-        PI_LIVECRAFT_MANAGER_RESTART_EXIT_CODE: String(restartExitCode),
-        PI_LIVECRAFT_MANAGER_RUNTIME_REVISION: revision,
-        PI_LIVECRAFT_MANAGER_SUPERVISED: '1',
+        PI_KAZECRAFT_MANAGER_RESTART_EXIT_CODE: String(restartExitCode),
+        PI_KAZECRAFT_MANAGER_RUNTIME_REVISION: revision,
+        PI_KAZECRAFT_MANAGER_SUPERVISED: '1',
       },
       stdio: 'inherit',
     })

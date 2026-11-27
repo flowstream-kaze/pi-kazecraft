@@ -21,7 +21,7 @@ Pi stops for a question or an approval (`input`, any blocking `extension_ui_requ
 kazecraft's own agent picker), and one low note when a session you are not looking at finishes, or
 the open one finishes while the tab is hidden or unfocused (`background`). `finishedSoundKind`
 decides between the last two. Each can be turned off, with a shared volume, in Settings →
-Notifications, stored in `pi-livecraft.notification-sounds` (`notification-sounds.ts` parses it and
+Notifications, stored in `pi-kazecraft.notification-sounds` (`notification-sounds.ts` parses it and
 is covered by `test/notification-sounds.test.ts`).
 
 `App.tsx` plays a chime only from the live event stream (`subscribeManagerEvents`); replayed events

@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path'
 import type { JsonObject } from '../../../shared/types.ts'
 import { isObject } from '../../../shared/is-object.ts'
 
-const defaultDecodeSpeedStorePath = process.env.PI_LIVECRAFT_DECODE_SPEED_STORE
-  ?? join(homedir(), '.pi-livecraft', 'decode-speeds.json')
+const defaultDecodeSpeedStorePath = process.env.PI_KAZECRAFT_DECODE_SPEED_STORE
+  ?? join(homedir(), '.pi-kazecraft', 'decode-speeds.json')
 /** Oldest measurements are dropped beyond this count to keep the file small. */
 const maxStoredSpeeds = 5_000
 /** Hosts that name this machine; URL hostnames keep IPv6 literals in brackets. */

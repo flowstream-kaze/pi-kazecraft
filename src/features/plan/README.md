@@ -48,6 +48,6 @@ The normalized plan travels in the tool result's `details`. Pi persists `details
 - No server route, no manager change: the session file is the only store.
 - A blocking Pi dialog inside a run (`ask_user_question`, a confirmation) counts as active time: Pi keeps the run open, so neither the clock nor the panel can see the wait.
 - The conversation still renders the call as a compact `3/6 · current step` card in semi-detailed and detailed views.
-- Pi's terminal interface shows only the one-line acknowledgement; the panel is a Livecraft surface.
+- Pi's terminal interface shows only the one-line acknowledgement; the panel is a Kazecraft surface.
 
 Focused coverage: `test/plan.test.ts` (parsing, derivation, timing, presentation).

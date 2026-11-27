@@ -142,17 +142,17 @@ function App() {
     canRestart: false,
   })
   const [conversationView, setConversationView] = useState<ConversationView>(() => {
-    const stored = window.localStorage.getItem('pi-livecraft.conversation-view')
+    const stored = window.localStorage.getItem('pi-kazecraft.conversation-view')
     if (stored === 'detailed' || stored === 'simple-expanded') return 'detailed'
     if (stored === 'semi-detailed') return 'semi-detailed'
     if (stored === 'simple') return 'simple'
-    return window.localStorage.getItem('pi-livecraft.detailed-view') === 'false'
+    return window.localStorage.getItem('pi-kazecraft.detailed-view') === 'false'
       ? 'simple'
       : 'detailed'
   })
   const selectConversationView = useCallback((view: ConversationView) => {
     setConversationView(view)
-    window.localStorage.setItem('pi-livecraft.conversation-view', view)
+    window.localStorage.setItem('pi-kazecraft.conversation-view', view)
   }, [])
 
   // Dialogs and notifications
@@ -168,11 +168,11 @@ function App() {
 
   // Workspace tools and sidebars
   const [workspaceSidebarWidth, setWorkspaceSidebarWidth] = useState(() =>
-    readWorkspaceSidebarWidth(window.localStorage.getItem('pi-livecraft.workspace-sidebar-width'))
+    readWorkspaceSidebarWidth(window.localStorage.getItem('pi-kazecraft.workspace-sidebar-width'))
   )
   const [workspaceSidebarCollapsed, setWorkspaceSidebarCollapsed] = useState(() =>
     readWorkspaceSidebarCollapsed(
-      window.localStorage.getItem('pi-livecraft.workspace-sidebar-collapsed'),
+      window.localStorage.getItem('pi-kazecraft.workspace-sidebar-collapsed'),
     )
   )
   const [gitSnapshot, setGitSnapshot] = useState<GitSnapshot | null>(null)
@@ -181,13 +181,13 @@ function App() {
   )
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readRightSidebarWidth(
-      window.localStorage.getItem('pi-livecraft.right-sidebar-width') ?? window
+      window.localStorage.getItem('pi-kazecraft.right-sidebar-width') ?? window
         .localStorage
-        .getItem('pi-livecraft.git-sidebar-width'),
+        .getItem('pi-kazecraft.git-sidebar-width'),
     )
   )
   const [rightSidebarHidden, setRightSidebarHidden] = useState(() =>
-    window.localStorage.getItem('pi-livecraft.right-sidebar-hidden') === 'true'
+    window.localStorage.getItem('pi-kazecraft.right-sidebar-hidden') === 'true'
   )
   /** Whether the "Your messages" list, opened from the top bar, is shown. */
   const [messageNavigatorOpen, setMessageNavigatorOpen] = useState(false)
@@ -229,7 +229,7 @@ function App() {
   useEffect(() => applyFontSizes(document.documentElement, fontSizes), [fontSizes])
 
   // Workspace and session synchronization
-  const selectedIdRef = useRef(window.localStorage.getItem('pi-livecraft.selected-session') ?? '')
+  const selectedIdRef = useRef(window.localStorage.getItem('pi-kazecraft.selected-session') ?? '')
   const replayPiEventRef = useRef<
     (sessionId: string, event: JsonObject, sequence?: number) => void
   >(() => undefined)
@@ -460,14 +460,14 @@ function App() {
   // Sidebar preferences
   const updateWorkspaceSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampWorkspaceSidebarWidth(width)
-    window.localStorage.setItem('pi-livecraft.workspace-sidebar-width', String(nextWidth))
+    window.localStorage.setItem('pi-kazecraft.workspace-sidebar-width', String(nextWidth))
     setWorkspaceSidebarWidth(nextWidth)
   }, [])
 
   const toggleWorkspaceSidebar = useCallback(() => {
     const nextCollapsed = !workspaceSidebarCollapsed
     window.localStorage.setItem(
-      'pi-livecraft.workspace-sidebar-collapsed',
+      'pi-kazecraft.workspace-sidebar-collapsed',
       String(nextCollapsed),
     )
     setWorkspaceSidebarCollapsed(nextCollapsed)
@@ -475,18 +475,18 @@ function App() {
 
   const updateRightSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampRightSidebarWidth(width)
-    window.localStorage.setItem('pi-livecraft.right-sidebar-width', String(nextWidth))
+    window.localStorage.setItem('pi-kazecraft.right-sidebar-width', String(nextWidth))
     setRightSidebarWidth(nextWidth)
   }, [])
 
   /** Hides or shows the whole tools sidebar, rail included, and remembers the choice. */
   const setRightSidebarHiddenPreference = useCallback((hidden: boolean) => {
-    window.localStorage.setItem('pi-livecraft.right-sidebar-hidden', String(hidden))
+    window.localStorage.setItem('pi-kazecraft.right-sidebar-hidden', String(hidden))
     setRightSidebarHidden(hidden)
   }, [])
 
   const openRightWidget = useCallback((widget: RightWidget) => {
-    window.localStorage.setItem('pi-livecraft.right-sidebar-widget', widget)
+    window.localStorage.setItem('pi-kazecraft.right-sidebar-widget', widget)
     setActiveRightWidget(widget)
     // A widget opened from the palette or a shortcut brings a hidden sidebar back.
     setRightSidebarHiddenPreference(false)
@@ -693,7 +693,7 @@ function App() {
         ) selectCreatedSession(sessionId)
         if (event.method === 'notify' && typeof event.message === 'string')
           showToast(event.notifyType === 'error' ? 'error' : 'notice', event.message, sessionId)
-        // Intercept agent selector silently when Livecraft requested the options list.
+        // Intercept agent selector silently when Kazecraft requested the options list.
         if (isAgentSelector(event) && agentOptionsLoadingRef.current[sessionId]) {
           const options = event.options.filter((o): o is string => typeof o === 'string')
           setAgentOptions((current) => ({ ...current, [sessionId]: options }))
@@ -1015,7 +1015,7 @@ function App() {
     if (id === 'toggle-conversation-view') {
       setConversationView((current) => {
         const next = nextConversationView(current)
-        window.localStorage.setItem('pi-livecraft.conversation-view', next)
+        window.localStorage.setItem('pi-kazecraft.conversation-view', next)
         return next
       })
       return
@@ -1257,7 +1257,7 @@ function App() {
   const navigateToAnalysisTarget = useCallback((target: SessionAnalysisTarget): void => {
     if (target.kind === 'tool' || target.kind === 'turn') {
       setConversationView('detailed')
-      window.localStorage.setItem('pi-livecraft.conversation-view', 'detailed')
+      window.localStorage.setItem('pi-kazecraft.conversation-view', 'detailed')
     }
     setConversationNavigation((current) => ({ id: (current?.id ?? 0) + 1, target }))
   }, [])
@@ -1608,7 +1608,7 @@ function App() {
           onWidgetSelect={(widget) =>
             setActiveRightWidget((current) => {
               const next = current === widget ? null : widget
-              window.localStorage.setItem('pi-livecraft.right-sidebar-widget', next ?? 'none')
+              window.localStorage.setItem('pi-kazecraft.right-sidebar-widget', next ?? 'none')
               return next
             })}
         />
@@ -1687,11 +1687,11 @@ function App() {
           onChange={(id, shortcut) => {
             const next = { ...shortcuts, [id]: shortcut }
             setShortcuts(next)
-            window.localStorage.setItem('pi-livecraft.shortcuts', JSON.stringify(next))
+            window.localStorage.setItem('pi-kazecraft.shortcuts', JSON.stringify(next))
           }}
           onTerminalCommandChange={(value) => {
             setTerminalCommand(value)
-            window.localStorage.setItem('pi-livecraft.terminal-command', value)
+            window.localStorage.setItem('pi-kazecraft.terminal-command', value)
           }}
           onSelectTheme={selectTheme}
           onDuplicateTheme={duplicateActiveTheme}
@@ -1701,7 +1701,7 @@ function App() {
           onResetTheme={resetSelectedTheme}
           onReset={() => {
             setShortcuts(defaultShortcuts)
-            window.localStorage.setItem('pi-livecraft.shortcuts', JSON.stringify(defaultShortcuts))
+            window.localStorage.setItem('pi-kazecraft.shortcuts', JSON.stringify(defaultShortcuts))
           }}
           onClose={() => setSettingsOpen(false)}
           currentModel={selectedSession && isObject(snapshot.state?.model)
@@ -1726,7 +1726,7 @@ function App() {
 function readShortcuts(): Partial<Record<CommandId, string>> {
   try {
     const value: unknown = JSON.parse(
-      window.localStorage.getItem('pi-livecraft.shortcuts') ?? 'null',
+      window.localStorage.getItem('pi-kazecraft.shortcuts') ?? 'null',
     )
     if (!isObject(value)) return defaultShortcuts
     const primaryModifier = navigator.platform.toLowerCase().includes('mac') ? 'meta' : 'ctrl'
@@ -1746,16 +1746,16 @@ function readShortcuts(): Partial<Record<CommandId, string>> {
 }
 
 function readTerminalCommand(): string {
-  const stored = window.localStorage.getItem('pi-livecraft.terminal-command')
+  const stored = window.localStorage.getItem('pi-kazecraft.terminal-command')
   return stored && stored.trim() && stored.includes('{cwd}') ? stored : ''
 }
 
 /** Restores the last-selected right sidebar widget, falling back to git when not collapsed. */
 function readActiveRightWidget(): RightWidget | null {
-  const stored = window.localStorage.getItem('pi-livecraft.right-sidebar-widget')
+  const stored = window.localStorage.getItem('pi-kazecraft.right-sidebar-widget')
   if (isRightWidget(stored)) return stored
   if (stored === 'none') return null
-  return window.localStorage.getItem('pi-livecraft.git-sidebar-collapsed') === 'true' ? null : 'git'
+  return window.localStorage.getItem('pi-kazecraft.git-sidebar-collapsed') === 'true' ? null : 'git'
 }
 
 function isManagerRuntimeStatus(value: unknown): value is ManagerRuntimeStatus {

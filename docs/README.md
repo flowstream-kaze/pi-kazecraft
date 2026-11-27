@@ -1,6 +1,6 @@
 # Documentation
 
-Pi Livecraft is documented in layers: begin with the system you want to build on, then follow a deeper link only when the change crosses a boundary. Implementation guides describe the project's supported composition points; feature README files record their local contracts.
+Pi Kazecraft is documented in layers: begin with the system you want to build on, then follow a deeper link only when the change crosses a boundary. Implementation guides describe the project's supported composition points; feature README files record their local contracts.
 
 ## Find the right place
 

@@ -3,7 +3,7 @@
  * Plain logic only, so it can be tested without a browser; `useModelSwitch` uses it.
  */
 
-export const MODEL_LOAD_TIMES_KEY = 'pi-livecraft.model-load-seconds'
+export const MODEL_LOAD_TIMES_KEY = 'pi-kazecraft.model-load-seconds'
 
 /** Measured load times in seconds, keyed by "provider/model". */
 export type LoadTimes = Readonly<Record<string, number>>

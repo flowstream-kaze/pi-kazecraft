@@ -6,7 +6,7 @@
 
 - `commands/` defines commands, default shortcuts, normalization, and conflict detection.
 - `settings/` captures shortcut changes and resets them.
-- `settings/font-sizes.ts` defines and validates the text sizes (messages, thinking, code, input box); `settings/font-size-storage.ts` stores them under `pi-livecraft.font-sizes` and applies them as `--font-size-*` CSS variables. `App.tsx` owns the value.
+- `settings/font-sizes.ts` defines and validates the text sizes (messages, thinking, code, input box); `settings/font-size-storage.ts` stores them under `pi-kazecraft.font-sizes` and applies them as `--font-size-*` CSS variables. `App.tsx` owns the value.
 - `App.tsx` persists shortcuts, theme, conversation view, workspace restoration, left and right sidebar state.
 - `composer/` persists drafts per session.
 
@@ -14,6 +14,6 @@ All values stay in browser `localStorage`; never store secrets there. Readers mu
 
 ## Add a preference
 
-Keep the value with its narrowest owner, expose it in `SettingsPanel` only when users should configure it, and persist it under the `pi-livecraft.` prefix. Add a focused test when parsing, migration, or validation is non-trivial.
+Keep the value with its narrowest owner, expose it in `SettingsPanel` only when users should configure it, and persist it under the `pi-kazecraft.` prefix. Add a focused test when parsing, migration, or validation is non-trivial.
 
 Read [how to add a settings tab](/docs/HOW-TO-SETTINGS.md) for the tabbed modal structure, or [commands](/src/features/commands/README.md) for palette entries and shortcuts, or [right sidebar](/src/features/right-sidebar/README.md) for widget state.

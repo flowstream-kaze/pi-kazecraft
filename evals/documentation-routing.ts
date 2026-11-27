@@ -63,7 +63,7 @@ const documentationCases: DocumentationCase[] = [
         paths: ['src/features/composer/selects/ComposerSelect.tsx'],
       },
     ],
-    allowedDocuments: ['.pi/skills/livecraft-ui/SKILL.md'],
+    allowedDocuments: ['.pi/skills/kazecraft-ui/SKILL.md'],
   },
   {
     name: 'settings',
@@ -78,7 +78,7 @@ const documentationCases: DocumentationCase[] = [
       { label: 'settings owner', paths: ['src/features/settings/SettingsPanel.tsx'] },
       { label: 'application wiring', paths: ['src/App.tsx'] },
     ],
-    allowedDocuments: ['.pi/skills/livecraft-ui/SKILL.md'],
+    allowedDocuments: ['.pi/skills/kazecraft-ui/SKILL.md'],
   },
   {
     name: 'manager lifecycle',

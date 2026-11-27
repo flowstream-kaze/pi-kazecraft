@@ -11,7 +11,7 @@ import {
   parseAskUserQuestionRequest,
   parseAskUserQuestionResponse,
 } from '../shared/ask-user-question.ts'
-const rpcTitle = 'Pi Livecraft questionnaire'
+const rpcTitle = 'Pi Kazecraft questionnaire'
 export default function registerAskUserQuestion(pi: ExtensionAPI): void {
   // Register after extension loading so a same-named auto-discovered tool does not trigger Pi's fatal load diagnostic.
   pi.on('session_start', (_event, ctx) => registerAskUserQuestionTool(pi, ctx))
@@ -20,7 +20,7 @@ export default function registerAskUserQuestion(pi: ExtensionAPI): void {
 function registerAskUserQuestionTool(pi: ExtensionAPI, ctx: ExtensionContext): void {
   if (pi.getAllTools().some((tool) => tool.name === 'ask_user_question')) {
     ctx.ui.notify(
-      'The ask_user_question tool is already registered in Pi. Pi Livecraft will not replace it; the questionnaire remains available, but its UI may be limited while that tool remains registered.',
+      'The ask_user_question tool is already registered in Pi. Pi Kazecraft will not replace it; the questionnaire remains available, but its UI may be limited while that tool remains registered.',
       'error',
     )
     return
@@ -64,7 +64,7 @@ function registerAskUserQuestionTool(pi: ExtensionAPI, ctx: ExtensionContext): v
 
       const response = ctx.mode === 'tui'
         ? await askInTui(request, ctx)
-        : await askInLivecraft(request, ctx)
+        : await askInKazecraft(request, ctx)
       return result(
         response,
         response.cancelled
@@ -75,7 +75,7 @@ function registerAskUserQuestionTool(pi: ExtensionAPI, ctx: ExtensionContext): v
   })
 }
 
-async function askInLivecraft(request: AskUserQuestionRequest, ctx: ExtensionContext) {
+async function askInKazecraft(request: AskUserQuestionRequest, ctx: ExtensionContext) {
   const value = await ctx.ui.editor(rpcTitle, JSON.stringify(request))
   if (!value) return { answers: [], cancelled: true }
   try {

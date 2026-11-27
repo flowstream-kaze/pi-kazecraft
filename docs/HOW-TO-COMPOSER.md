@@ -171,7 +171,7 @@ rare and high-impact — trace every caller of the modified handler before editi
 - **Send:** `submit()` builds the final message, clears the draft, calls `onSend`, and
   restores the draft on failure.
 - **Drafts:** persisted per session in `localStorage` under
-  `pi-livecraft.composer-draft.<sessionId>`. Cleared on successful send.
+  `pi-kazecraft.composer-draft.<sessionId>`. Cleared on successful send.
 
 ## Files touched
 

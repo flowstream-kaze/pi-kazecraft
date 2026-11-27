@@ -46,7 +46,7 @@ jobs:
         env:
           PI_OFFLINE: '1'
         run: |
-          log_file="$RUNNER_TEMP/pi-livecraft-dev.log"
+          log_file="$RUNNER_TEMP/pi-kazecraft-dev.log"
           setsid npm run dev >"$log_file" 2>&1 &
           dev_pid=$!
 

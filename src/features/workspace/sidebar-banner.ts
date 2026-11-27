@@ -1,6 +1,6 @@
 /** The sidebar's banner: the built-in Pi banner, or an image the user chose (kept as a data URL). */
 
-export const SIDEBAR_BANNER_KEY = 'pi-livecraft.sidebar-banner'
+export const SIDEBAR_BANNER_KEY = 'pi-kazecraft.sidebar-banner'
 
 import {
   isBannerDataUrl,

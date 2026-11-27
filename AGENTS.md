@@ -1,6 +1,6 @@
 # Agent instructions
 
-Pi Livecraft is designed to be changed by the agents that use it. Work from evidence, change behavior at its owning boundary, and stop as soon as the request is proved.
+Pi Kazecraft is designed to be changed by the agents that use it. Work from evidence, change behavior at its owning boundary, and stop as soon as the request is proved.
 
 ## Start with the closest contract
 
@@ -58,7 +58,7 @@ For a bug, trace the common cause before protecting symptoms. For any extra tool
 - Use Pi's public RPC protocol. Do not inspect internal files to reproduce an RPC capability.
 - The application listens only on `127.0.0.1`. Do not broaden exposure without explicit authentication and scoping.
 - Do not add a database, frontend router, state manager, or UI library without demonstrated need.
-- Before visual UI work, load the project-specific `livecraft-ui` skill. Do not load another visual skill unless explicitly requested, and do not load any for state, API, data, or event wiring without visual impact.
+- Before visual UI work, load the project-specific `kazecraft-ui` skill. Do not load another visual skill unless explicitly requested, and do not load any for state, API, data, or event wiring without visual impact.
 
 ## Execute safely
 

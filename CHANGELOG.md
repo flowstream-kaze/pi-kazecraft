@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Copy assistant code blocks to the clipboard with a single click.
-- Launch Pi Livecraft from any directory with the global `pi-livecraft` command.
+- Launch Pi Kazecraft from any directory with the global `pi-kazecraft` command.
 - Fork conversations from user messages and edit the returned prompt before continuing.
 - Show partially generated tool calls with inferred built-in names such as `ask_user_question`, streamed scalar arguments and file paths, and a lowercase fallback label.
 - Display semantic file-type icons in the Git widget and after tool-call paths.
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Run Pi Livecraft natively on Windows, including process launching, home-path resolution, terminal and directory completion.
+- Run Pi Kazecraft natively on Windows, including process launching, home-path resolution, terminal and directory completion.
 - Manage sessions directly from the sidebar: rename them or close running Pi sessions without losing persisted history; the next nearby active session is selected automatically.
 - Reclaim sidebar space by collapsing the sessions panel.
 - Keep changes safer with CI checks (typecheck, lint, tests) against the latest Pi version.

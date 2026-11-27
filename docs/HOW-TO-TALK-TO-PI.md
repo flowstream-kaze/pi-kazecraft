@@ -1,7 +1,7 @@
 # How to talk to Pi
 
 Every interaction with a Pi session goes through the same tunnel. This guide
-explains how to reach Pi from Livecraft code and where to find the full
+explains how to reach Pi from Kazecraft code and where to find the full
 protocol reference.
 
 ## The tunnel
@@ -93,7 +93,7 @@ function, called from the feature that needs them.
 ```
 
 Models arrive in `snapshot.models` (typed as `JsonObject[]`). Access fields
-with guards or casts — Livecraft keeps the type loose to avoid coupling to
+with guards or casts — Kazecraft keeps the type loose to avoid coupling to
 Pi's schema.
 
 ### Session stats
@@ -123,5 +123,5 @@ $(npm root -g)/@earendil-works/pi-coding-agent/docs/rpc.md
 
 That guide covers all 30+ commands, the complete event stream, extension UI
 sub-protocol, and every field on every response. Use it as the authoritative
-source — this document only describes how Livecraft routes commands, not what
+source — this document only describes how Kazecraft routes commands, not what
 each command does.

@@ -23,7 +23,7 @@ export function MyWidget({ workspacePath }: { workspacePath: string }) {
 
 **Constraints:**
 - The active panel is rendered conditionally from the rail; switching widgets can unmount it. Keep state that must survive switching in `App.tsx`, `localStorage`, or backend persistence.
-- Persistence uses `localStorage` (`pi-livecraft.` prefix) on the frontend, or a
+- Persistence uses `localStorage` (`pi-kazecraft.` prefix) on the frontend, or a
   `server/features/<widget>/` module on the backend
 - CSS classes live in `src/features/<widget>/<widget>.css`
 

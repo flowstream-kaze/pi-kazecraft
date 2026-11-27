@@ -133,12 +133,12 @@ The `TabPanel` component handles `role="tabpanel"`, `aria-labelledby`, and the `
 
 ### Step 6: Persist the value (if needed)
 
-Settings values live in `localStorage` under the `pi-livecraft.` prefix. Add a line to your `App.tsx` callback:
+Settings values live in `localStorage` under the `pi-kazecraft.` prefix. Add a line to your `App.tsx` callback:
 
 ```ts
 onMyFeatureChange={(value) => {
   setMyFeature(value)
-  window.localStorage.setItem('pi-livecraft.my-feature', value)
+  window.localStorage.setItem('pi-kazecraft.my-feature', value)
 }}
 ```
 

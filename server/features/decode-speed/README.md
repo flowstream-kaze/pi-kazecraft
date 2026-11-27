@@ -9,6 +9,6 @@ Pi stores only `durationMs` for a request, which includes reading the prompt, so
 
 The backend processes manager events through one ordered queue, so the short `/v1/status` lookup never lets later events overtake a reply's `message_end`.
 
-The backend adds the measurement to the `message_end` event as `message.decodeTokensPerSecond` before broadcasting it, and `DecodeSpeedStore` persists it in `~/.pi-livecraft/decode-speeds.json` (override with `PI_LIVECRAFT_DECODE_SPEED_STORE`), keyed by the reply's `responseId` or timestamp. Session snapshots add the stored speeds back to assistant messages. Replies written while no backend was running, or before this feature, have no speed.
+The backend adds the measurement to the `message_end` event as `message.decodeTokensPerSecond` before broadcasting it, and `DecodeSpeedStore` persists it in `~/.pi-kazecraft/decode-speeds.json` (override with `PI_KAZECRAFT_DECODE_SPEED_STORE`), keyed by the reply's `responseId` or timestamp. Session snapshots add the stored speeds back to assistant messages. Replies written while no backend was running, or before this feature, have no speed.
 
 Focused coverage: `test/decode-speed.test.ts`.

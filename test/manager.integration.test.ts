@@ -13,7 +13,7 @@ test(
   async (t) => {
     const supervisor = spawn(process.execPath, ['server/manager-supervisor.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, PI_LIVECRAFT_MANAGER_PORT: 'invalid' },
+      env: { ...process.env, PI_KAZECRAFT_MANAGER_PORT: 'invalid' },
       stdio: ['ignore', 'ignore', 'pipe'],
     })
     t.after(() => void stopProcess(supervisor))
@@ -22,10 +22,10 @@ test(
       errors += chunk.toString('utf8')
     })
 
-    await waitFor(() => errors.includes('PI_LIVECRAFT_MANAGER_PORT must be a valid port'))
+    await waitFor(() => errors.includes('PI_KAZECRAFT_MANAGER_PORT must be a valid port'))
     await new Promise((resolve) => setTimeout(resolve, 200))
     assert.equal(supervisor.exitCode, null)
-    assert.equal(errors.match(/PI_LIVECRAFT_MANAGER_PORT must be a valid port/g)?.length, 1)
+    assert.equal(errors.match(/PI_KAZECRAFT_MANAGER_PORT must be a valid port/g)?.length, 1)
 
     await stopProcess(supervisor)
   },
@@ -38,7 +38,7 @@ test(
     const port = 45_000 + (process.pid % 10_000)
     const supervisor = spawn(process.execPath, ['server/manager-supervisor.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, PI_LIVECRAFT_MANAGER_PORT: String(port) },
+      env: { ...process.env, PI_KAZECRAFT_MANAGER_PORT: String(port) },
       stdio: 'ignore',
     })
     const firstClient = await connectManager(port)
@@ -81,10 +81,10 @@ test('reconciles live Pi work before restarting the manager', { timeout: 10_000 
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
-      PI_LIVECRAFT_MANAGER_RESTART_EXIT_CODE: '75',
-      PI_LIVECRAFT_MANAGER_RUNTIME_REVISION: 'test-revision',
-      PI_LIVECRAFT_MANAGER_SUPERVISED: '1',
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_RESTART_EXIT_CODE: '75',
+      PI_KAZECRAFT_MANAGER_RUNTIME_REVISION: 'test-revision',
+      PI_KAZECRAFT_MANAGER_SUPERVISED: '1',
     },
     stdio: 'ignore',
   })
@@ -189,7 +189,7 @@ test(
       env: {
         ...process.env,
         PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-        PI_LIVECRAFT_MANAGER_PORT: String(port),
+        PI_KAZECRAFT_MANAGER_PORT: String(port),
       },
       stdio: 'ignore',
     })
@@ -225,7 +225,7 @@ test('deduplicates concurrent opens for one session path', { timeout: 10_000 }, 
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -268,7 +268,7 @@ test(
       env: {
         ...process.env,
         PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-        PI_LIVECRAFT_MANAGER_PORT: String(port),
+        PI_KAZECRAFT_MANAGER_PORT: String(port),
       },
       stdio: 'ignore',
     })
@@ -371,8 +371,8 @@ test(
       env: {
         ...process.env,
         PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-        PI_LIVECRAFT_MANAGER_PORT: String(port),
-        PI_LIVECRAFT_IDLE_REUSE_AFTER_MS: '0',
+        PI_KAZECRAFT_MANAGER_PORT: String(port),
+        PI_KAZECRAFT_IDLE_REUSE_AFTER_MS: '0',
       },
       stdio: 'ignore',
     })
@@ -444,7 +444,7 @@ test('tracks the new Pi session file after forking', { timeout: 10_000 }, async 
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -483,7 +483,7 @@ test('completes a manual compact without timeout', { timeout: 10_000 }, async ()
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -518,7 +518,7 @@ test('closes a Pi session without deleting its manager summary', { timeout: 10_0
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -552,7 +552,7 @@ test('renames a persisted session through Pi RPC', { timeout: 10_000 }, async ()
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -581,7 +581,7 @@ test('restarts an exited Pi session when reopening it', { timeout: 10_000 }, asy
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -625,7 +625,7 @@ test('improves a prompt on the session model in an isolated process', {
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -659,7 +659,7 @@ test('improves a prompt with a direction preset', { timeout: 10_000 }, async () 
     env: {
       ...process.env,
       PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
-      PI_LIVECRAFT_MANAGER_PORT: String(port),
+      PI_KAZECRAFT_MANAGER_PORT: String(port),
     },
     stdio: 'ignore',
   })
@@ -717,7 +717,7 @@ const extensionPaths = process.argv.flatMap((argument, index) =>
 const extensionIndex = process.argv.indexOf('--extension')
 if (isolated) {
   const agentDir = process.env.PI_CODING_AGENT_DIR
-  if (!agentDir || !agentDir.includes('livecraft-isolated')) throw new Error('PI_CODING_AGENT_DIR must point to an isolated profile, got ' + agentDir)
+  if (!agentDir || !agentDir.includes('kazecraft-isolated')) throw new Error('PI_CODING_AGENT_DIR must point to an isolated profile, got ' + agentDir)
   for (const flag of ['--no-tools', '--no-extensions', '--no-skills', '--no-prompt-templates', '--no-themes', '--no-context-files']) {
     if (!process.argv.includes(flag)) throw new Error('Missing isolation flag: ' + flag)
   }

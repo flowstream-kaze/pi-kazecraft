@@ -51,7 +51,7 @@ export function folderPickerInvocations(
     return [{
       command: 'powershell.exe',
       args: ['-NoProfile', '-NonInteractive', '-STA', '-Command', windowsPickerScript],
-      env: { ...env, PI_LIVECRAFT_PICK_INITIAL: initialPath ?? '' },
+      env: { ...env, PI_KAZECRAFT_PICK_INITIAL: initialPath ?? '' },
     }]
   }
   if (platform === 'darwin') {
@@ -162,7 +162,7 @@ async function wslFolderPickerInvocations(
 }
 
 function withWslPathInterop(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const variableName = 'PI_LIVECRAFT_PICK_INITIAL'
+  const variableName = 'PI_KAZECRAFT_PICK_INITIAL'
   const entries = (env.WSLENV ?? '').split(':').filter(Boolean)
   const existing = entries.filter((entry) => entry.split('/')[0] !== variableName)
   // This path is already converted with wslpath, so WSLENV must pass it through unchanged.
@@ -237,7 +237,7 @@ export const windowsPickerScript = [
   'Add-Type -AssemblyName System.Windows.Forms',
   '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
   `$dialog.Description = "${pickerTitle}"`,
-  '$initial = $env:PI_LIVECRAFT_PICK_INITIAL',
+  '$initial = $env:PI_KAZECRAFT_PICK_INITIAL',
   'if ($initial -and (Test-Path -LiteralPath $initial -PathType Container)) { $dialog.SelectedPath = $initial }',
   'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) } else { exit 1 }',
 ]

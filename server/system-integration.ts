@@ -163,10 +163,10 @@ function invokeWindowsPath(path: string, spawnProcess: SpawnProcess): Promise<vo
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        '$ErrorActionPreference = "Stop"; Start-Process -FilePath $env:PI_LIVECRAFT_OPEN_PATH -WindowStyle Normal',
+        '$ErrorActionPreference = "Stop"; Start-Process -FilePath $env:PI_KAZECRAFT_OPEN_PATH -WindowStyle Normal',
       ],
       {
-        env: { ...process.env, PI_LIVECRAFT_OPEN_PATH: path },
+        env: { ...process.env, PI_KAZECRAFT_OPEN_PATH: path },
         shell: false,
         windowsHide: true,
         stdio: 'ignore',

@@ -98,7 +98,7 @@ export const Composer = memo(function Composer({
   replyFailure?: ReplyFailure
   onDismissReplyFailure?: () => void
 }) {
-  const draftStorageKey = `pi-livecraft.composer-draft.${session.id}`
+  const draftStorageKey = `pi-kazecraft.composer-draft.${session.id}`
   const [message, setMessage] = useState(() => readComposerDraft(draftStorageKey))
   const [images, setImages] = useState<ComposerImage[]>([])
   const [preparingImages, setPreparingImages] = useState(false)

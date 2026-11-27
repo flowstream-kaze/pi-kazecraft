@@ -13,7 +13,7 @@ test('reads a text file from the workspace and rejects its root', async () => {
   const file = await readWorkspaceFile(process.cwd(), 'package.json')
   assert.equal(path, file.path)
   assert.equal(relative(process.cwd(), file.path), 'package.json')
-  assert.match(file.content, /"name": "pi-livecraft"/)
+  assert.match(file.content, /"name": "pi-kazecraft"/)
   await assert.rejects(readWorkspaceFile(process.cwd(), '.'), (error: unknown) => {
     assert.equal(error instanceof WorkspaceFileError, true)
     assert.equal((error as WorkspaceFileError).status, 403)

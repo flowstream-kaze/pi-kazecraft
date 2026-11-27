@@ -11,7 +11,7 @@ tags:
   - docs
   - ui
 owner:
-  team: Livecraft
+  team: Kazecraft
 notes: |
   First line
   Second line
@@ -24,7 +24,7 @@ notes: |
         { key: 'title', value: 'Guide' },
         { key: 'draft', value: 'false' },
         { key: 'tags', value: '- docs\n- ui' },
-        { key: 'owner', value: 'team: Livecraft' },
+        { key: 'owner', value: 'team: Kazecraft' },
         { key: 'notes', value: 'First line\nSecond line\n' },
       ],
     },

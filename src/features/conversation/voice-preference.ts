@@ -4,7 +4,7 @@ import {
   type ReadAloudVoice,
 } from '../../../shared/read-aloud-voices.ts'
 
-const key = 'pi-livecraft.read-aloud-voice'
+const key = 'pi-kazecraft.read-aloud-voice'
 let inMemory: ReadAloudVoice = defaultVoice
 
 export function readVoice(): ReadAloudVoice {

@@ -1,13 +1,13 @@
 # Terminal action
 
-Terminal is a direct workspace action rather than a panel widget. Selecting it opens an external terminal in the current workspace and leaves the Livecraft conversation where it is.
+Terminal is a direct workspace action rather than a panel widget. Selecting it opens an external terminal in the current workspace and leaves the Kazecraft conversation where it is.
 
 ## Where it is available
 
 - from the command palette;
 - from the editable `Open terminal` shortcut, which defaults to `Alt+T`.
 
-Launch errors appear as regular Livecraft notifications.
+Launch errors appear as regular Kazecraft notifications.
 
 ## Launcher selection
 
@@ -23,7 +23,7 @@ A custom command can be entered in Settings. It must contain `{cwd}`, which the 
 
 ## Ownership and data flow
 
-`App.tsx` executes the palette command and stores the custom template in `pi-livecraft.terminal-command`. Browser requests go through `src/api.ts`.
+`App.tsx` executes the palette command and stores the custom template in `pi-kazecraft.terminal-command`. Browser requests go through `src/api.ts`.
 
 The [terminal backend capability](/server/features/terminal/README.md) validates the workspace and command template before spawning the external application.
 

@@ -49,7 +49,7 @@ take tens of seconds. `useModelSwitch` (with `ModelSwitchNotice.tsx`) makes that
   seconds elapsed, with a progress bar. It polls llama-swap's `/running` every second (`stopping`,
   `starting`, `ready`) and shows "… is ready." briefly at the end; after 10 minutes it says the
   load is taking unusually long.
-- Load times are learned per model in `pi-livecraft.model-load-seconds` (`model-switch.ts`): the
+- Load times are learned per model in `pi-kazecraft.model-load-seconds` (`model-switch.ts`): the
   bar follows the estimate but stops below 95 % until the model is ready; the first load of a model
   shows a sweeping bar instead. Covered by `test/model-switch-progress.test.ts` and
   `test/model-switch.test.ts`.
@@ -68,7 +68,7 @@ recognition is in `src/features/conversation/reply-failure.ts` (`test/reply-fail
 ## Internal state
 
 - `message`, `images` — the draft; persisted to `localStorage` per session
-  (`pi-livecraft.composer-draft.<sessionId>`).
+  (`pi-kazecraft.composer-draft.<sessionId>`).
 - `slashOpen`, `slashFilter`, `slashIndex` — slash-command popover.
 - `openSelect` — which dropdown (agent/model/thinking) is open.
 - `behavior` — `steer` vs `followUp`, only visible while Pi is running.

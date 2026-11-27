@@ -11,7 +11,7 @@ import {
 } from './plan-state.ts'
 import type { PlanStep, PlanStepStatus } from '../../../shared/plan.ts'
 
-const collapsedPlanKey = 'pi-livecraft.plan-collapsed'
+const collapsedPlanKey = 'pi-kazecraft.plan-collapsed'
 
 const markers: Record<PlanStepStatus, string> = {
   pending: '○',

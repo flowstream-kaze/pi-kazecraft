@@ -1,12 +1,12 @@
 # Pi extensions
 
-These extensions are loaded into every persistent Pi session started by Pi Livecraft. Disposable isolated prompts disable extensions unless their caller explicitly supplies paths:
+These extensions are loaded into every persistent Pi session started by Pi Kazecraft. Disposable isolated prompts disable extensions unless their caller explicitly supplies paths:
 
 - `ask-user-question.ts` registers the structured questionnaire tool and bridges its versioned payload through Pi's extension UI protocol.
 - `plan.ts` registers the `update_plan` tool and returns the committed macro plan in its result `details`, which reach the browser without entering the model context.
 - `read-document.ts` registers the `read_document` tool, which reads files Pi's `read` cannot: PDF (page by page, via `unpdf`), Word `.docx` (paragraph text, via `mammoth`) and spreadsheets `.xlsx`, `.xlsm`, `.xls`, `.ods`, `.csv`, `.tsv` (each sheet as CSV, via SheetJS). Output pages like `read`: at most 2,000 lines or 50 KB per call, continued with `offset`. A PDF without a text layer (scanned) returns a note instead of text; `.doc`, PowerPoint and password-protected files return a plain error. The conversion lives in `document-text.ts`, which has no Pi dependency and is covered by `test/read-document.test.ts`. SheetJS is installed from its official CDN (`cdn.sheetjs.com`), because the `xlsx` package on npm is outdated.
 
-`server/pi-process.ts` owns the extension paths. These modules use Pi's public extension API and shared protocols only; they do not define Pi Livecraft HTTP routes.
+`server/pi-process.ts` owns the extension paths. These modules use Pi's public extension API and shared protocols only; they do not define Pi Kazecraft HTTP routes.
 
 For requests displayed in the browser, keep the versioned payload parser in `shared/` and the UI-specific recognition and response flow in [`src/features/dialogs/`](/src/features/dialogs/README.md).
 

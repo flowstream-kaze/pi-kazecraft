@@ -61,10 +61,10 @@ test('opens Windows paths through a hidden PowerShell broker with a visible shel
     '-NoProfile',
     '-NonInteractive',
     '-Command',
-    '$ErrorActionPreference = "Stop"; Start-Process -FilePath $env:PI_LIVECRAFT_OPEN_PATH -WindowStyle Normal',
+    '$ErrorActionPreference = "Stop"; Start-Process -FilePath $env:PI_KAZECRAFT_OPEN_PATH -WindowStyle Normal',
   ])
   assert.equal(call?.command, 'powershell.exe')
-  assert.equal(call?.env?.PI_LIVECRAFT_OPEN_PATH, 'C:\\hostile & ü\\"file"')
+  assert.equal(call?.env?.PI_KAZECRAFT_OPEN_PATH, 'C:\\hostile & ü\\"file"')
   assert.equal(call?.shell, false)
   assert.equal(call?.windowsHide, true)
 })

@@ -20,7 +20,7 @@ export const DEFAULT_FONT_SIZES: FontSizes = {
 
 export const MIN_FONT_SIZE = 10
 export const MAX_FONT_SIZE = 24
-export const FONT_SIZES_STORAGE_KEY = 'pi-livecraft.font-sizes'
+export const FONT_SIZES_STORAGE_KEY = 'pi-kazecraft.font-sizes'
 
 /** The CSS variable each size sets; the stylesheets fall back to the defaults when it is missing. */
 export const fontSizeVariable = (key: FontSizeKey) => `--font-size-${key}`

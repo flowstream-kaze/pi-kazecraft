@@ -100,7 +100,7 @@ test('passes the Windows starting directory only through the environment', () =>
     '-Command',
   ])
   assert.ok(!invocation.args.join(' ').includes('hostile'))
-  assert.equal(invocation.env?.PI_LIVECRAFT_PICK_INITIAL, 'C:\\hostile & ü')
+  assert.equal(invocation.env?.PI_KAZECRAFT_PICK_INITIAL, 'C:\\hostile & ü')
 })
 
 test('keeps every else on its if statement in the Windows dialog script', () => {
@@ -150,10 +150,10 @@ test('uses the Windows dialog first in WSL and converts its selected path back',
   assert.equal(selected, '/mnt/c/Users/Ada/Projects')
   assert.deepEqual(runs.map(({ command }) => command), ['powershell.exe'])
   assert.equal(
-    runs[0].env?.PI_LIVECRAFT_PICK_INITIAL,
+    runs[0].env?.PI_KAZECRAFT_PICK_INITIAL,
     '\\\\wsl.localhost\\Ubuntu\\home\\ada\\work',
   )
-  assert.ok(runs[0].env?.WSLENV?.split(':').includes('PI_LIVECRAFT_PICK_INITIAL'))
+  assert.ok(runs[0].env?.WSLENV?.split(':').includes('PI_KAZECRAFT_PICK_INITIAL'))
   assert.deepEqual(conversions, [
     ['/home/ada/work', 'to-windows'],
     ['C:\\Users\\Ada\\Projects', 'to-wsl'],

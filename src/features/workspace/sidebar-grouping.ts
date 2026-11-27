@@ -10,7 +10,7 @@ export const SIDEBAR_GROUP_BY_OPTIONS: readonly { id: SidebarGroupBy; label: str
   { id: 'none', label: 'None' },
 ]
 
-export const SIDEBAR_GROUP_BY_KEY = 'pi-livecraft.sidebar-group-by'
+export const SIDEBAR_GROUP_BY_KEY = 'pi-kazecraft.sidebar-group-by'
 
 /** One rendered sidebar section: a project folder, a date range, or the single flat list. */
 export interface SidebarSection {

@@ -37,7 +37,7 @@ export const DEFAULT_NOTIFICATION_SOUNDS: NotificationSoundPreferences = {
   volume: 60,
 }
 
-export const NOTIFICATION_SOUNDS_STORAGE_KEY = 'pi-livecraft.notification-sounds'
+export const NOTIFICATION_SOUNDS_STORAGE_KEY = 'pi-kazecraft.notification-sounds'
 
 /** Reads stored preferences; anything missing or malformed falls back to the defaults. */
 export function parseNotificationSounds(raw: string | null): NotificationSoundPreferences {

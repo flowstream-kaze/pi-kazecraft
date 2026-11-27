@@ -1,6 +1,6 @@
 import { isObject } from './is-object.ts'
 
-export const planProtocol = 'pi-livecraft.plan'
+export const planProtocol = 'pi-kazecraft.plan'
 export const planVersion = 1
 export const planMinimumSteps = 2
 export const planMaximumSteps = 8

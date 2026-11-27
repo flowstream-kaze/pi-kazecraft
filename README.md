@@ -1,34 +1,34 @@
 <div align="center">
 
-#  ⤿ Pi Livecraft ⤾
+#  ⤿ Pi Kazecraft ⤾
 
-**Pi does the agentic stuff. Livecraft gives it a live editable React app.**
+**Pi does the agentic stuff. Kazecraft gives it a live editable React app.**
 
 The repository is set up to be forked and changed while you use it. 
 
 [![Built with Pi](https://img.shields.io/badge/Built%20with-Pi.dev%20❤️-6C63FF?style=flat-square&logo=terminal&logoColor=white)](https://pi.dev)
-[![GitHub stars](https://img.shields.io/github/stars/ItsNerisma/pi-livecraft?style=flat-square&logo=github)](https://github.com/ItsNerisma/pi-livecraft/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/ItsNerisma/pi-livecraft?style=flat-square&logo=github)](https://github.com/ItsNerisma/pi-livecraft/forks)
-[![License](https://img.shields.io/github/license/ItsNerisma/pi-livecraft?style=flat-square)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/flowstream-kaze/pi-kazecraft?style=flat-square&logo=github)](https://github.com/flowstream-kaze/pi-kazecraft/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/flowstream-kaze/pi-kazecraft?style=flat-square&logo=github)](https://github.com/flowstream-kaze/pi-kazecraft/forks)
+[![License](https://img.shields.io/github/license/flowstream-kaze/pi-kazecraft?style=flat-square)](LICENSE)
 
-[Why Livecraft?](#why-livecraft) · [Quick start](#quick-start) · [What is included](#what-is-already-in-the-box) · [Make it yours](#make-it-yours) · [Docs](/docs/README.md)
+[Why Kazecraft?](#why-kazecraft) · [Quick start](#quick-start) · [What is included](#what-is-already-in-the-box) · [Make it yours](#make-it-yours) · [Docs](/docs/README.md)
 
 </div>
 
-<p align="center"><img src="https://github.com/user-attachments/assets/0398eb37-692c-4042-a197-942184f0235c" alt="Pi reshaping the Livecraft interface from a live session" width="960" /></p>
+<p align="center"><img src="https://github.com/user-attachments/assets/0398eb37-692c-4042-a197-942184f0235c" alt="Pi reshaping the Kazecraft interface from a live session" width="960" /></p>
 <p align="center"><sub>Just a silly example of live app modification</sub></p>
 
 ## Pi still does the work
 
 Pi owns the providers, models, sessions, history, tools, commands, and extensions. It reasons, writes code, and runs tools.
 
-Livecraft sits on top of it.
+Kazecraft sits on top of it.
 
-> Whatever Pi can send, Livecraft can receive. Whatever Pi can read, Livecraft can send.
+> Whatever Pi can send, Kazecraft can receive. Whatever Pi can read, Kazecraft can send.
 
-You configure Pi as usual. Livecraft just calls it instead of keeping a second provider or model configuration.
+You configure Pi as usual. Kazecraft just calls it instead of keeping a second provider or model configuration.
 
-## Why Livecraft?
+## Why Kazecraft?
 
 **Pi already provides an exceptional experience in the terminal, no doubt about it.**
 
@@ -46,7 +46,7 @@ What about displaying fully interactive HTML pages directly in the tool result b
 
 > "Meh"
 
-*Well, maybe Livecraft isn't for you then :3*
+*Well, maybe Kazecraft isn't for you then :3*
 
 **The whole point is that** the UI lives in this repository and is hot-reloaded by Vite while all Pi sessions stay alive, so the model can change it **while** you use it. When something in the interface is annoying, the usual loop is:
 
@@ -58,9 +58,9 @@ All documentation in the project (except this README) is primarily meant to be r
 
 ## Quick start
 
-You need **Node.js 24+**, **npm**, and a configured **Pi**. Native Windows, Linux, and WSL are supported. On Windows, Pi itself requires Bash; Git for Windows is the simplest source, or configure `shellPath` in `~/.pi/agent/settings.json`. A global npm installation should expose `pi.cmd` through `PATH`; Livecraft resolves its package entry point and never sends Pi arguments through `cmd.exe`.
+You need **Node.js 24+**, **npm**, and a configured **Pi**. Native Windows, Linux, and WSL are supported. On Windows, Pi itself requires Bash; Git for Windows is the simplest source, or configure `shellPath` in `~/.pi/agent/settings.json`. A global npm installation should expose `pi.cmd` through `PATH`; Kazecraft resolves its package entry point and never sends Pi arguments through `cmd.exe`.
 
-**[Fork the repository](https://github.com/ItsNerisma/pi-livecraft/fork)**, then run:
+**[Fork the repository](https://github.com/flowstream-kaze/pi-kazecraft/fork)**, then run:
 
 ```bash
 git clone https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
@@ -70,22 +70,22 @@ npm install
 npm run dev # this allows hot reloading
 ```
 
-To launch Livecraft from any directory, link this checkout once in each shell environment you use:
+To launch Kazecraft from any directory, link this checkout once in each shell environment you use:
 
 ```bash
 npm link
-pi-livecraft
+pi-kazecraft
 ```
 
 WSL/Linux and native Windows have separate global npm paths: run `npm link` from a checkout visible to each environment. The command always runs this repository's `npm run dev`.
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Kazecraft.
 
 ## What is already in the box
 
 > Everything was designed to be easily navigable, extensible, and craftable by an AI agent, so you can try ideas quickly, just like with Pi!
 
-> These are systems already present that you can build on top of or completely replace. You can also build totally new ones. Once the fork is done, it's **YOUR Livecraft**
+> These are systems already present that you can build on top of or completely replace. You can also build totally new ones. Once the fork is done, it's **YOUR Kazecraft**
 
 ### Work with Pi
 
@@ -95,13 +95,13 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 - **Isolated prompts:** run a one-off Pi prompt from a widget, command, or anywhere really. By default it uses the current session's model, returns one answer, and does not add anything to the active conversation
 
-- **Extension dialogs:** handle Pi's standard select, confirm, input, and editor requests, plus structured questionnaires from Livecraft extensions
+- **Extension dialogs:** handle Pi's standard select, confirm, input, and editor requests, plus structured questionnaires from Kazecraft extensions
 
-- **Livecraft-specific Pi extensions:** craft extensions meant to be loaded into Pi only when working with Livecraft, to improve your Livecraft's UX/UI.
+- **Kazecraft-specific Pi extensions:** craft extensions meant to be loaded into Pi only when working with Kazecraft, to improve your Kazecraft's UX/UI.
 
 ### See what Pi is doing
 
-- **Live conversations:** responses, activity, tool execution, usage, decode speed, errors, updates, notifications... I mean, everything Pi sends, Livecraft sees
+- **Live conversations:** responses, activity, tool execution, usage, decode speed, errors, updates, notifications... I mean, everything Pi sends, Kazecraft sees
 
 - **Enhanced tool call rendering:** allow for complex (or simpler) tool call rendering. As an example, HTML, SVG, Markdown, and CSV will render directly, with the source still available and colorized with just a click
 
@@ -111,7 +111,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 - **Session analysis:** real-time usage analysis of the session. All the data is shown as interactive graphs. Click any point to jump back to the corresponding turn or tool call in the session. This one is a very good example of the potential here!
 
-- **Todos:** add tasks before you forget them while the session is running. Morph these todos into real sessions with a single click. They are persisted per workspace (I used this feature heavily while developing Livecraft)
+- **Todos:** add tasks before you forget them while the session is running. Morph these todos into real sessions with a single click. They are persisted per workspace (I used this feature heavily while developing Kazecraft)
 
 - **Git:** review status, diffs, changed files, and unpushed commits; commit, push, reset, or revert without leaving the conversation
 
@@ -131,7 +131,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and you should see Livecraft
 
 ## Make it yours
 
-Pi Livecraft's repository is a starting point. **Forks are expected to drift away from upstream**, and there is no requirement to keep them synchronized.
+Pi Kazecraft's repository is a starting point. **Forks are expected to drift away from upstream**, and there is no requirement to keep them synchronized.
 
 > In fact, DO update the core and do your thing. Upstream won't change except for small bug fixes. No more features!
 
@@ -171,13 +171,13 @@ The [documentation index](/docs/README.md) links the feature contracts, backend 
 
 Everything runs locally!
 
-The browser renders the application. A local backend handles Livecraft features and carries Pi's events back to the page.
+The browser renders the application. A local backend handles Kazecraft features and carries Pi's events back to the page.
 
 A **separate manager starts and owns the Pi processes**, so refreshing the browser or restarting the backend does not close them, because the manager lives outside the Vite hot reload domain.
 
 ```mermaid
 flowchart LR
-    subgraph Livecraft["Pi Livecraft"]
+    subgraph Kazecraft["Pi Kazecraft"]
         direction LR
         Browser(["React browser"])
         Backend["Local backend"]
@@ -194,28 +194,28 @@ flowchart LR
 
 Vite can update the frontend while a session stays open. The backend can also restart without closing active Pi processes.
 
-If manager code changes, Livecraft shows a persistent notice and waits. The manager is not replaced until you ask and Pi is idle. Sessions closed during the replacement remain available in history. That's the trick. Cool, right? :)
+If manager code changes, Kazecraft shows a persistent notice and waits. The manager is not replaced until you ask and Pi is idle. Sessions closed during the replacement remain available in history. That's the trick. Cool, right? :)
 
-The manager talks to Pi through its public RPC protocol. Livecraft extensions use Pi's public extension API so you're in good hands.
+The manager talks to Pi through its public RPC protocol. Kazecraft extensions use Pi's public extension API so you're in good hands.
 
-Git, todos, terminal launching, and browser preferences remain local Livecraft features. There is no Livecraft extension system, so you can break it all!
+Git, todos, terminal launching, and browser preferences remain local Kazecraft features. There is no Kazecraft extension system, so you can break it all!
 
 > Read the [architecture guide](/docs/ARCHITECTURE.md) for the full flow. Read the [manager lifecycle guide](/docs/MANAGER-LIFECYCLE.md) if you want to mess with the manager's process supervision.
 
 ## Optional Pi extras
 
-When these extensions are installed and configured in Pi, Livecraft already contains the logic and UI for them, since they are the apples to my Pi (holy...)
+When these extensions are installed and configured in Pi, Kazecraft already contains the logic and UI for them, since they are the apples to my Pi (holy...)
 
-- **[@nerisma/pi-agents](https://github.com/ItsNerisma/pi-agents):** adds specialized agents with focused prompts, restricted tool sets, and isolated delegation. When Pi exposes `/agent`, Livecraft displays an agent picker.
+- **[@nerisma/pi-agents](https://github.com/ItsNerisma/pi-agents):** adds specialized agents with focused prompts, restricted tool sets, and isolated delegation. When Pi exposes `/agent`, Kazecraft displays an agent picker.
 - **[@nerisma/pi-auto-title](https://github.com/ItsNerisma/pi-auto-title):** names sessions from their first prompt, which makes parallel histories much easier to scan.
 
-> Just to be clear, these are NOT mandatory. Pi Livecraft can work with anything; these are just my preferences, and they work by default :)
+> Just to be clear, these are NOT mandatory. Pi Kazecraft can work with anything; these are just my preferences, and they work by default :)
 
 <details>
 <summary><strong>Troubleshooting</strong></summary>
 
-- `pi: command not found`: install Pi globally and verify that `pi --version` works in the shell used to start Livecraft. On native Windows, `where.exe pi.cmd` must find the npm launcher.
-- The manager or backend is unavailable: check ports `43120` and `43121`, or set `PI_LIVECRAFT_MANAGER_PORT` and `PI_LIVECRAFT_BACKEND_PORT`. After a manager crash, restart `npm run dev`; the supervisor intentionally does not relaunch it automatically.
+- `pi: command not found`: install Pi globally and verify that `pi --version` works in the shell used to start Kazecraft. On native Windows, `where.exe pi.cmd` must find the npm launcher.
+- The manager or backend is unavailable: check ports `43120` and `43121`, or set `PI_KAZECRAFT_MANAGER_PORT` and `PI_KAZECRAFT_BACKEND_PORT`. After a manager crash, restart `npm run dev`; the supervisor intentionally does not relaunch it automatically.
 - A new session cannot answer: launch Pi once, configure a provider with `/login`, and verify that the `/agent` extension is available if your setup expects it.
 - Native Windows desktop actions unavailable: verify that Windows PowerShell is available. Terminal selection tries Windows Terminal, Alacritty, WezTerm, PowerShell 7, Windows PowerShell, then Command Prompt.
 - Linux desktop actions unavailable: install or expose `xdg-open` and `x-terminal-emulator` in `PATH`.
@@ -241,7 +241,7 @@ The Pi RPC integration test additionally requires a configured Pi installation.
 
 ## Built with Pi, for Pi ❤️
 
-Pi provides the agent runtime, sessions, tools, and extension model. It does the actual work; Livecraft is a local web interface built around it.
+Pi provides the agent runtime, sessions, tools, and extension model. It does the actual work; Kazecraft is a local web interface built around it.
 
 ## Contributing
 
@@ -249,4 +249,4 @@ Focused bug reports and bug fixes are welcome upstream. Workflow features belong
 
 ## License
 
-Pi Livecraft is available under the [MIT License](/LICENSE).
+Pi Kazecraft is available under the [MIT License](/LICENSE).

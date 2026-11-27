@@ -20,7 +20,7 @@ export interface PreparedImage {
   height: number
 }
 
-export const WELCOME_BANNER_KEY = 'pi-livecraft.welcome-banner'
+export const WELCOME_BANNER_KEY = 'pi-kazecraft.welcome-banner'
 
 /** Largest display size of the welcome banner. */
 export const BANNER_MAX_DISPLAY = { width: 460, height: 200 }

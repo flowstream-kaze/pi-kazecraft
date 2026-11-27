@@ -32,13 +32,13 @@ interface StartSessionOptions {
   revealSection?: boolean
 }
 
-const COMPLETED_SESSIONS_KEY = 'pi-livecraft.completed-sessions'
-const WORKSPACE_PATHS_KEY = 'pi-livecraft.workspace-paths'
-const COLLAPSED_WORKSPACES_KEY = 'pi-livecraft.collapsed-workspaces'
-const ACTIVE_WORKSPACE_KEY = 'pi-livecraft.active-workspace'
-const SELECTED_SESSION_KEY = 'pi-livecraft.selected-session'
-const ARCHIVED_SESSIONS_KEY = 'pi-livecraft.archived-sessions'
-const WORKSPACE_NAMES_KEY = 'pi-livecraft.workspace-names'
+const COMPLETED_SESSIONS_KEY = 'pi-kazecraft.completed-sessions'
+const WORKSPACE_PATHS_KEY = 'pi-kazecraft.workspace-paths'
+const COLLAPSED_WORKSPACES_KEY = 'pi-kazecraft.collapsed-workspaces'
+const ACTIVE_WORKSPACE_KEY = 'pi-kazecraft.active-workspace'
+const SELECTED_SESSION_KEY = 'pi-kazecraft.selected-session'
+const ARCHIVED_SESSIONS_KEY = 'pi-kazecraft.archived-sessions'
+const WORKSPACE_NAMES_KEY = 'pi-kazecraft.workspace-names'
 const MAX_COMPLETED_SESSIONS = 30
 
 /**

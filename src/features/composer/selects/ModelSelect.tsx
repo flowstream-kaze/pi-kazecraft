@@ -17,7 +17,7 @@ export const ModelSelect = memo(function ModelSelect(
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       return JSON.parse(
-        window.localStorage.getItem('pi-livecraft.favorite-models') ?? '[]',
+        window.localStorage.getItem('pi-kazecraft.favorite-models') ?? '[]',
       ) as string[]
     } catch {
       return []
@@ -28,7 +28,7 @@ export const ModelSelect = memo(function ModelSelect(
       ? favorites.filter((favorite) => favorite !== value)
       : [...favorites, value]
     setFavorites(next)
-    window.localStorage.setItem('pi-livecraft.favorite-models', JSON.stringify(next))
+    window.localStorage.setItem('pi-kazecraft.favorite-models', JSON.stringify(next))
   }
   const orderedModels = [...models].sort((a, b) => {
     const aId = `${a.provider}/${a.id}`
